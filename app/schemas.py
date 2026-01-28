@@ -111,6 +111,7 @@ class JobOptions(BaseModel):
 class JobAnalyzeRequest(BaseModel):
     # 직무 분석 요청 스키마.
     user_id: int
+    name: str
     company: str
     department: str
     position: str

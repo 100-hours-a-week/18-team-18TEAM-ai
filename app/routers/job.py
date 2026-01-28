@@ -183,6 +183,7 @@ def _build_user_prompt(input_data: Dict[str, Any], search_results: List[Dict[str
     return f"""다음 정보를 바탕으로 자기소개를 작성해라.
 
 입력 데이터:
+- 이름: {input_data.get("name", "")}
 - 회사명: {input_data.get("company_name", "")}
 - 부서: {input_data.get("department", "")}
 - 직무: {input_data.get("position", "")}
@@ -210,6 +211,7 @@ async def analyze_job(
     # 입력 데이터 구성
     input_data = {
         "user_id": payload.user_id,
+        "name": payload.name,
         "company_name": payload.company,
         "department": payload.department,
         "position": payload.position,
@@ -267,6 +269,7 @@ async def analyze_job_debug(
     # 입력 데이터 구성
     input_data = {
         "user_id": payload.user_id,
+        "name": payload.name,
         "company_name": payload.company,
         "department": payload.department,
         "position": payload.position,
