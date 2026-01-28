@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 set -euo pipefail
-
+ 
 BASE="/home/ubuntu"
 
 SERVICE_UNIT="bizkit-ai.service"
