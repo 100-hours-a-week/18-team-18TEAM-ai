@@ -19,7 +19,7 @@ VENV_DIR="${BASE}/caro-ai-venv"
 # 실행 파라미터 (기본값, .env-ai에서 덮어쓰는 방식 추천)
 APP_MODULE="${APP_MODULE:-app.main:app}"
 APP_PORT="${APP_PORT:-8000}"
-HEALTH_URL="${HEALTH_URL:-http://127.0.0.1:${APP_PORT}/health}"
+HEALTH_URL="${HEALTH_URL:-http://127.0.0.1:${APP_PORT}/ai/health}"
 
 if [[ -z "${RELEASE_ID}" ]]; then
   echo "[deploy-ai] missing RELEASE_ID. usage: deploy-ai.sh <version>" >&2
