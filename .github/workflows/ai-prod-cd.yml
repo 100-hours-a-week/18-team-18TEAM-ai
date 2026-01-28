@@ -58,7 +58,6 @@ jobs:
           set -euo pipefail
           git config --global user.name "github-actions"
           git config --global user.email "action@github.com"
-
           semantic-release -c releaserc.toml version
 
       - name: Read version from VERSION
