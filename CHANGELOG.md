@@ -2,6 +2,14 @@
 
 <!-- version list -->
 
+## v0.1.3 (2026-01-28)
+
+### Bug Fixes
+
+- CD 파이프라인 버그 수정
+  ([`7e07364`](https://github.com/100-hours-a-week/18-team-18TEAM-ai/commit/7e073641433041217b2647be036ec2711c8b631c))
+
+
 ## v0.1.2 (2026-01-28)
 
 ### Bug Fixes
