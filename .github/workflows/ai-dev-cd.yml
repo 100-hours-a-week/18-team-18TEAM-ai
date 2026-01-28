@@ -57,7 +57,7 @@ jobs:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           set -euo pipefail
-          semantic-release version --config releaserc.toml
+          semantic-release -c releaserc.toml version
 
       - name: Read version from VERSION file
         id: ver
