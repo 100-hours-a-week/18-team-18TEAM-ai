@@ -7,7 +7,10 @@ from fastapi.middleware.cors import CORSMiddleware
 from dotenv import load_dotenv
 
 
+from app.routers import hex as hex_router
 from app.routers import job as job_router
+
+from app.routers import tasks as tasks_router
 
 
 
@@ -25,7 +28,10 @@ def create_app() -> FastAPI:
     )
 
 
+    app.include_router(hex_router.router, prefix="/ai")
     app.include_router(job_router.router, prefix="/ai")
+
+    app.include_router(tasks_router.router, prefix="/ai")
   
     @app.get("/ai/health")
     async def health() -> dict[str, str]:

@@ -7,9 +7,11 @@ from typing import Any, Dict
 from fastapi import APIRouter, Header, HTTPException
 
 from app.clients.github_collector import GitHubCollector, GitHubRateLimitError, load_mock_features
-from app.schemas import HexAnalyzeRequest, HexAnalyzeResponse
+from app.schemas import HexAnalyzeRequest, HexAnalyzeResponse, TaskSubmitResponse, TaskStatus
 from app.services.scoring import calculate_scores
 from app.clients.vllm_client import VLLMClient
+from app.tasks.producer import get_producer
+from app.tasks.models import TaskType
 
 router = APIRouter()
 
@@ -98,7 +100,40 @@ def _build_user_prompt(input_data: Dict[str, Any]) -> str:
 """.strip()
 
 
-@router.post("/hex/analyze", response_model=HexAnalyzeResponse)
+# ============================================================
+# 비동기 작업 엔드포인트    
+# ============================================================
+
+@router.post("/hex/analyze", response_model=TaskSubmitResponse)
+async def analyze_hex_async(
+    payload: HexAnalyzeRequest,
+    authorization: str | None = Header(default=None),
+    x_request_id: str | None = Header(default=None),
+) -> TaskSubmitResponse:
+    """비동기 HEX 분석 작업을 제출한다. 결과는 /ai/tasks/{task_id}에서 조회."""
+    _ = authorization
+    _ = x_request_id
+
+    producer = get_producer()
+    record = await producer.submit(
+        task_type=TaskType.HEX,
+        payload=payload.model_dump(),
+    )
+
+    return TaskSubmitResponse(
+        task_id=record.task_id,
+        status=TaskStatus(record.status),
+        created_at=record.created_at,
+        poll_url=f"/ai/tasks/{record.task_id}",
+    )
+
+
+
+# ============================================================
+# 기존 동기 작업
+# ============================================================
+
+@router.post("/hex/analyze/aync", response_model=HexAnalyzeResponse)
 async def analyze_hex(
     payload: HexAnalyzeRequest,
     authorization: str | None = Header(default=None),
@@ -180,7 +215,6 @@ async def analyze_hex(
     }
 
     return HexAnalyzeResponse(message="analysis_completed", data=data)
-
 
 @router.post("/hex/analyze/debug")
 async def analyze_hex_debug(
