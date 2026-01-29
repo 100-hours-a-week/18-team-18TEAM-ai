@@ -7,8 +7,10 @@ from typing import Any, Dict, List, Optional
 import httpx
 from fastapi import APIRouter, Header
 
-from app.schemas import JobAnalyzeRequest, JobAnalyzeResponse
+from app.schemas import JobAnalyzeRequest, JobAnalyzeResponse, TaskSubmitResponse, TaskStatus
 from app.clients.vllm_client import VLLMClient
+from app.tasks.producer import get_producer
+from app.tasks.models import TaskType
 
 router = APIRouter()
 
@@ -198,7 +200,39 @@ def _build_user_prompt(input_data: Dict[str, Any], search_results: List[Dict[str
 위 정보를 바탕으로 자연스러운 자기소개 JSON만 출력해라."""
 
 
-@router.post("/job/analyze", response_model=JobAnalyzeResponse)
+# ============================================================
+# 비동기 작업 엔드포인트
+# ============================================================
+
+@router.post("/job/analyze", response_model=TaskSubmitResponse)
+async def analyze_job_async(
+    payload: JobAnalyzeRequest,
+    authorization: str | None = Header(default=None),
+    x_request_id: str | None = Header(default=None),
+) -> TaskSubmitResponse:
+    """비동기 Job 분석 작업을 제출한다. 결과는 /ai/tasks/{task_id}에서 조회."""
+    _ = authorization
+    _ = x_request_id
+
+    producer = get_producer()
+    record = await producer.submit(
+        task_type=TaskType.JOB,
+        payload=payload.model_dump(),
+    )
+
+    return TaskSubmitResponse(
+        task_id=record.task_id,
+        status=TaskStatus(record.status),
+        created_at=record.created_at,
+        poll_url=f"/ai/tasks/{record.task_id}",
+    )
+
+
+# ============================================================
+# 기존 동기 작업
+# ============================================================
+
+@router.post("/job/analyze/sync", response_model=JobAnalyzeResponse)
 async def analyze_job(
     payload: JobAnalyzeRequest,
     authorization: str | None = Header(default=None),
@@ -254,6 +288,7 @@ async def analyze_job(
     }
 
     return JobAnalyzeResponse(message="ok", data=data)
+
 
 
 @router.post("/job/analyze/debug")

@@ -1,8 +1,47 @@
 from __future__ import annotations
 
+from datetime import datetime
+from enum import Enum
 from typing import Any, Dict, List, Optional
 
 from pydantic import BaseModel, Field
+
+
+# ============================================================
+# Task 관련 스키마 (비동기 작업)
+# ============================================================
+
+class TaskStatus(str, Enum):
+    """작업 상태"""
+    PENDING = "pending"
+    RUNNING = "running"
+    COMPLETED = "completed"
+    FAILED = "failed"
+
+
+class TaskSubmitResponse(BaseModel):
+    """작업 제출 응답"""
+    task_id: str
+    status: TaskStatus
+    created_at: datetime
+    poll_url: str
+
+
+class TaskStatusResponse(BaseModel):
+    """작업 상태 조회 응답"""
+    task_id: str
+    task_type: str
+    status: TaskStatus
+    progress: Optional[str] = None
+    created_at: datetime
+    started_at: Optional[datetime] = None
+    completed_at: Optional[datetime] = None
+    error: Optional[str] = None
+
+
+# ============================================================
+# 기존 스키마
+# ============================================================
 
 
 class ProjectItem(BaseModel):
