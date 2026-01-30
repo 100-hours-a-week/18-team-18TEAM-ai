@@ -89,6 +89,7 @@ jobs:
             --exclude='.github' \
             -czf "$OUT_ARCHIVE" \
             app \
+            run_worker.py \
             requirements.txt \
             VERSION \
             README.md || {
