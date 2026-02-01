@@ -13,10 +13,8 @@ CURRENT_FILE="${ARTIFACT_DIR}/.current_version"
 RELEASE_ID="${1:-}"
 RELEASE_DIR="${ARTIFACT_DIR}/${RELEASE_ID}"
 
-# 공유 venv (원하면 다른 경로로)
 VENV_DIR="${BASE}/caro-ai-venv"
 
-# 실행 파라미터 (기본값, .env-ai에서 덮어쓰는 방식 추천)
 APP_MODULE="${APP_MODULE:-app.main:app}"
 APP_PORT="${APP_PORT:-8000}"
 HEALTH_URL="${HEALTH_URL:-http://127.0.0.1:${APP_PORT}/ai/health}"
@@ -38,13 +36,11 @@ fi
 
 mkdir -p "${BACKUP_DIR}"
 
-# --- 이전 버전 읽기 ---
 PREV_ID=""
 if [[ -f "${CURRENT_FILE}" ]]; then
   PREV_ID="$(cat "${CURRENT_FILE}" | tr -d '\r' | xargs || true)"
 fi
 
-# --- venv 준비 + requirements 설치(공유 venv 기준) ---
 if [[ ! -d "${VENV_DIR}" ]]; then
   python3 -m venv "${VENV_DIR}"
 fi
@@ -55,7 +51,6 @@ if [[ -f "${REQ_FILE}" ]]; then
   "${VENV_DIR}/bin/pip" install -r "${REQ_FILE}" --no-cache-dir
 fi
 
-# --- systemd override 갱신: "java -jar" -> "uvicorn" ---
 OVERRIDE_DIR="/etc/systemd/system/${SERVICE_UNIT}.d"
 sudo mkdir -p "${OVERRIDE_DIR}"
 
@@ -70,7 +65,6 @@ EOF
 sudo systemctl daemon-reload
 sudo systemctl restart "${SERVICE_UNIT}"
 
-# --- health check (up to 30s) ---
 ok=0
 for i in $(seq 1 30); do
   if curl -fsS --max-time 2 "${HEALTH_URL}" >/dev/null; then
@@ -86,7 +80,6 @@ if [[ "${ok}" -eq 1 ]]; then
   exit 0
 fi
 
-# --- rollback to prev (BE와 동일 컨셉) ---
 echo "[deploy-ai] FAILED healthcheck. try rollback to prev=${PREV_ID}" >&2
 
 if [[ -n "${PREV_ID}" && -d "${ARTIFACT_DIR}/${PREV_ID}" ]]; then
@@ -109,3 +102,4 @@ EOF
 fi
 
 exit 1
+
