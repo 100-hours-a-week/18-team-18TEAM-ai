@@ -63,4 +63,3 @@ fi
 
 chmod +x "${REV_DIR}/deploy-ai.sh"
 exec "${REV_DIR}/deploy-ai.sh" "${RELEASE_ID}"
-
