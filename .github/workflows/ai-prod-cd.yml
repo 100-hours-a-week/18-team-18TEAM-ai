@@ -15,14 +15,15 @@ concurrency:
 
 jobs:
   deploy:
+    if: github.actor != 'github-actions[bot]'
     runs-on: ubuntu-24.04
     timeout-minutes: 25
 
     env:
-      APP_NAME: "bizkit-AI"
+      APP_NAME: "BizKit-AI"
       APP_STAGE: prod
       PYTHON_VERSION: "3.12"
-      HEALTH_URL: http://127.0.0.1:8000/health
+      HEALTH_URL: http://127.0.0.1:8000/ai/health
 
     steps:
       - name: Checkout
@@ -34,8 +35,12 @@ jobs:
         uses: actions/setup-python@v5
         with:
           python-version: ${{ env.PYTHON_VERSION }}
+          cache: "pip"
+          cache-dependency-path: |
+            requirements.txt
+            requirements-dev.txt
 
-      - name: Install Dependencies (for checks + semantic-release)
+      - name: Install Dependencies (pip + semantic-release)
         shell: bash
         run: |
           set -euo pipefail
@@ -43,7 +48,7 @@ jobs:
           pip install -r requirements.txt
           pip install python-semantic-release
 
-      - name: Build (compileall)
+      - name: Compile Check
         shell: bash
         run: |
           set -euo pipefail
@@ -52,7 +57,6 @@ jobs:
       - name: Semantic Release (prod)
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         shell: bash
         run: |
           set -euo pipefail
@@ -60,7 +64,7 @@ jobs:
           git config --global user.email "action@github.com"
           semantic-release -c releaserc.toml version
 
-      - name: Read version from VERSION
+      - name: Read version from VERSION file
         id: ver
         shell: bash
         run: |
@@ -86,13 +90,14 @@ jobs:
 
           tar \
             --exclude='.git' \
-            --exclude='.github' \
             --exclude='__pycache__' \
+            --exclude='.github' \
             --exclude='.venv' \
             --exclude='venv' \
             --exclude='.pytest_cache' \
             -czf "$OUT_ARCHIVE" \
             app \
+            run_worker.py \
             requirements.txt \
             VERSION \
             README.md || {
@@ -109,8 +114,9 @@ jobs:
           set -euo pipefail
           VERSION=${{ steps.ver.outputs.value }}
           BUCKET="${{ secrets.S3_BUCKET }}"
+          S3_PREFIX="${{ secrets.S3_PREFIX }}"
 
-          RELEASE_KEY="${{ secrets.S3_PREFIX }}/${APP_STAGE}/releases/ai/${VERSION}/bizkit-ai-${VERSION}.tar.gz"
+          RELEASE_KEY="${S3_PREFIX}/${APP_STAGE}/releases/ai/${VERSION}/bizkit-ai-${VERSION}.tar.gz"
 
           aws s3 cp "$OUT_ARCHIVE" "s3://$BUCKET/${RELEASE_KEY}" --cache-control no-cache
 
@@ -122,8 +128,6 @@ jobs:
         run: |
           set -euo pipefail
           VERSION=${{ steps.ver.outputs.value }}
-          BUCKET="$BUCKET"
-          RELEASE_KEY="$RELEASE_KEY"
 
           rm -rf bundle && mkdir -p bundle/codedeploy/ai/hooks
 
@@ -151,7 +155,8 @@ jobs:
         run: |
           set -euo pipefail
           VERSION=${{ steps.ver.outputs.value }}
-          BUNDLE_KEY="${{ secrets.S3_PREFIX }}/${APP_STAGE}/codedeploy/ai/${VERSION}/bundle-${{ github.run_id }}.zip"
+          S3_PREFIX="${{ secrets.S3_PREFIX }}"
+          BUNDLE_KEY="${S3_PREFIX}/${APP_STAGE}/codedeploy/ai/${VERSION}/bundle-${{ github.run_id }}.zip"
 
           aws s3 cp bundle.zip "s3://$BUCKET/$BUNDLE_KEY"
           echo "BUNDLE_KEY=$BUNDLE_KEY" >> "$GITHUB_ENV"
@@ -163,9 +168,6 @@ jobs:
 
           APP="${{ secrets.CODEDEPLOY_APP_AI_PROD }}"
           DG="${{ secrets.CODEDEPLOY_DG_AI_PROD }}"
-
-          echo "BUCKET=$BUCKET"
-          echo "BUNDLE_KEY=$BUNDLE_KEY"
 
           DEPLOY_ID="$(aws deploy create-deployment \
             --application-name "$APP" \
