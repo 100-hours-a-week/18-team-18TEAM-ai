@@ -1,22 +1,44 @@
+from __future__ import annotations
+
 import os
 
-from dotenv import load_dotenv
 from fastapi import FastAPI
-
-from app.api.routes import router as api_router
-
-load_dotenv()
-
-app = FastAPI(title="18-team-18TEAM-ai", version="0.1.0")
-app.include_router(api_router)
+from fastapi.middleware.cors import CORSMiddleware
+from dotenv import load_dotenv
 
 
-@app.get("/")
-def root() -> dict:
-    return {"status": "ok", "service": app.title}
+from app.routers import hex as hex_router
+from app.routers import job as job_router
+
+from app.routers import tasks as tasks_router
 
 
-def get_server_config() -> tuple[str, int]:
-    host = os.getenv("HOST", "0.0.0.0")
-    port = int(os.getenv("PORT", "8000"))
-    return host, port
+
+def create_app() -> FastAPI:
+    # FastAPI 앱과 공통 미들웨어/라우터를 구성한다.
+    load_dotenv()
+    app = FastAPI(title="18-team-18TEAM-ai", version="0.1.0")
+
+    app.add_middleware(
+        CORSMiddleware,
+        allow_origins=os.getenv("CORS_ALLOW_ORIGINS", "*").split(","),
+        allow_credentials=True,
+        allow_methods=["*"],
+        allow_headers=["*"],
+    )
+
+
+    app.include_router(hex_router.router, prefix="/ai")
+    app.include_router(job_router.router, prefix="/ai")
+
+    app.include_router(tasks_router.router, prefix="/ai")
+  
+    @app.get("/ai/health")
+    async def health() -> dict[str, str]:
+        # 간단한 헬스 체크 엔드포인트.
+        return {"status": "ok"}
+
+    return app
+
+
+app = create_app()
