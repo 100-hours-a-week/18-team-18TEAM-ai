@@ -1,0 +1,68 @@
+name: CI - PROD (AI)
+
+on:
+  pull_request:
+    branches: ["main"]
+
+concurrency:
+  group: ai-prod-ci-${{ github.head_ref || github.ref }}
+  cancel-in-progress: true
+
+env:
+  APP_NAME: "BizKit-AI"
+  APP_STAGE: "prod"
+  PYTHON_VERSION: "3.12"
+
+jobs:
+  setup:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set Up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+
+      - name: Install Dependencies
+        shell: bash
+        run: |
+          set -euo pipefail
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+
+      # - name: Test (pytest) - optional
+      #   shell: bash
+      #   run: |
+      #     set -euo pipefail
+      #     if command -v pytest >/dev/null 2>&1; then
+      #       pytest -q
+      #     else
+      #       echo "pytest not installed -> skip"
+      #     fi
+      
+      - name: Build (compileall)
+        shell: bash
+        run: |
+          set -euo pipefail
+          python -m compileall app
+
+      - name: Notify Discord on failure
+        if: failure()
+        env:
+          DISCORD_WEBHOOK_URL: ${{ secrets.DISCORD_WEBHOOK_URL }}
+        run: |
+          MESSAGE="AI Prod PR CI 실패
+          Repo: \`${{ github.repository }}\`
+          Branch: \`${{ github.head_ref || github.ref_name }}\`
+          Workflow: \`${{ github.workflow }}\`
+          Job: \`${{ github.job }}\`
+          Author: \`${{ github.actor }}\`
+          Stage: \`${APP_STAGE}\`
+          링크: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}"
+
+          JSON_MESSAGE=$(printf '%s\n' "$MESSAGE" | python3 -c 'import json,sys; print(json.dumps({"content": sys.stdin.read()}))')
+          curl -X POST -H "Content-Type: application/json" -d "$JSON_MESSAGE" "$DISCORD_WEBHOOK_URL"
