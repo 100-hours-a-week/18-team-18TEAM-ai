@@ -4,6 +4,7 @@ set -euo pipefail
 BASE="/home/ubuntu"
 
 SERVICE_UNIT="bizkit-ai.service"
+SERVICE_WORKER_UNIT="bizkit-ai-worker.service"
 ENV_FILE="${BASE}/.env-ai"
 
 ARTIFACT_DIR="${BASE}/artifact/ai"
@@ -53,6 +54,8 @@ fi
 
 OVERRIDE_DIR="/etc/systemd/system/${SERVICE_UNIT}.d"
 sudo mkdir -p "${OVERRIDE_DIR}"
+OVERRIDE_WORKER_DIR="/etc/systemd/system/${SERVICE_WORKER_UNIT}.d"
+sudo mkdir -p "${OVERRIDE_WORKER_DIR}"
 
 sudo tee "${OVERRIDE_DIR}/override.conf" >/dev/null <<EOF
 [Service]
@@ -62,8 +65,19 @@ ExecStart=
 ExecStart=${VENV_DIR}/bin/uvicorn ${APP_MODULE} --host 0.0.0.0 --port ${APP_PORT}
 EOF
 
+sudo tee "${OVERRIDE_WORKER_DIR}/override.conf" >/dev/null <<EOF
+[Service]
+Environment="VIRTUAL_ENV=${VENV_DIR}"
+Environment="PATH=${VENV_DIR}/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"
+ExecStart=${VENV_DIR}/bin/python run_worker.py
+EOF
+
+WorkingDirectory=${RELEASE_WORKER_DIR}
+
+
 sudo systemctl daemon-reload
 sudo systemctl restart "${SERVICE_UNIT}"
+sudo systemctl restart "${SERVICE_WORKER_UNIT}"
 
 ok=0
 for i in $(seq 1 30); do
