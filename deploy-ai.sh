@@ -67,12 +67,12 @@ EOF
 
 sudo tee "${OVERRIDE_WORKER_DIR}/override.conf" >/dev/null <<EOF
 [Service]
+EnvironmentFile=-${ENV_FILE}
+WorkingDirectory=${RELEASE_DIR}
 Environment="VIRTUAL_ENV=${VENV_DIR}"
 Environment="PATH=${VENV_DIR}/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"
 ExecStart=${VENV_DIR}/bin/python run_worker.py
 EOF
-
-WorkingDirectory=${RELEASE_WORKER_DIR}
 
 
 sudo systemctl daemon-reload
