@@ -2,6 +2,7 @@
 set -euo pipefail
  
 BASE="/home/ubuntu"
+SERVICE_BASE="/etc/systemd/system/"
 
 SERVICE_UNIT="bizkit-ai.service"
 SERVICE_WORKER_UNIT="bizkit-ai-worker.service"
@@ -71,6 +72,7 @@ EnvironmentFile=-${ENV_FILE}
 WorkingDirectory=${RELEASE_DIR}
 Environment="VIRTUAL_ENV=${VENV_DIR}"
 Environment="PATH=${VENV_DIR}/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"
+ExecStart=
 ExecStart=${VENV_DIR}/bin/python run_worker.py
 EOF
 
