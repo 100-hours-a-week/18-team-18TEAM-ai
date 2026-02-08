@@ -2,6 +2,47 @@
 
 <!-- version list -->
 
+## v0.3.0 (2026-02-08)
+
+### Bug Fixes
+
+- Github token 수정
+  ([`c01a79d`](https://github.com/100-hours-a-week/18-team-18TEAM-ai/commit/c01a79d48450249cbc5ee191e47d4fad50aa12c1))
+
+- 파이프라인 수정
+  ([`6ce3ce6`](https://github.com/100-hours-a-week/18-team-18TEAM-ai/commit/6ce3ce6aa6948a00357b3693409bba81c3265888))
+
+- 파이프라인 수정
+  ([`9c2310a`](https://github.com/100-hours-a-week/18-team-18TEAM-ai/commit/9c2310aa2919828f0baa51691cab8fd3f04c9c6e))
+
+### Chores
+
+- Conflict 해결
+  ([`17c659a`](https://github.com/100-hours-a-week/18-team-18TEAM-ai/commit/17c659aae50fe0bbae334e9a79f2ce13f51aa57e))
+
+### Features
+
+- LLM 출력 스키마 및 작성 가이드 수정
+  ([`3ccbf7d`](https://github.com/100-hours-a-week/18-team-18TEAM-ai/commit/3ccbf7df3481a9347b2a148fa88a7dcb06e0f61f))
+
+- LLM 출력 스키마의 소개 부분 수정 및 불필요한 정보 제거
+  ([`eb98577`](https://github.com/100-hours-a-week/18-team-18TEAM-ai/commit/eb98577d72c76d905495c9ca831fca7a891cb572))
+
+- Worker 유닛 실행로직 추가
+  ([`c5a2cd5`](https://github.com/100-hours-a-week/18-team-18TEAM-ai/commit/c5a2cd53c9f05f97272f9c3d04165332d476c093))
+
+- Worker 유닛 실행로직 추가
+  ([`ef01d9c`](https://github.com/100-hours-a-week/18-team-18TEAM-ai/commit/ef01d9c534f682607297f3fa1c5f145809580329))
+
+- Worker 유닛 실행로직 추가
+  ([`8f4a932`](https://github.com/100-hours-a-week/18-team-18TEAM-ai/commit/8f4a932cc0a368a3c4afc95adce3f590bafec425))
+
+### Refactoring
+
+- Ai-prod-cd.yml 수정
+  ([`340cfbe`](https://github.com/100-hours-a-week/18-team-18TEAM-ai/commit/340cfbef6d168a2ea2fe09effac251ad7b46e7d7))
+
+
 ## v0.2.0 (2026-01-30)
 
 ### Chores
