@@ -19,7 +19,14 @@ TAVILY_API_KEY = os.getenv("TAVILY_API_KEY", "")
 
 # LLM 출력 스키마 힌트
 SCHEMA_HINT = {
-    "introduction": "안녕하세요, 저는 [회사명] [부서명]에서 [직무]로 근무하고 있는 [이름]입니다..."
+    "introduction": (
+        "안녕하세요, 저는 카카오 옵저버빌리티에서 백엔드 개발자로 근무하고 있는 "
+        "홍길동입니다. 우리 팀은 시스템의 내부 상태를 이해하고, 문제를 사전에 "
+        "식별 및 해결하기 위해 메트릭, 로그 및 추적을 수집하고 분석하는 역할을 "
+        "담당하고 있습니다. 저는 백엔드 개발자로서 웹사이트나 앱의 사용자가 볼 수 없는 "
+        "뒷단(서버, 데이터베이스, API)을 개발하고 관리하며, 사용자의 요청에 따라 데이터를 "
+        "처리하고 전달하는 역할을 하고 있습니다."
+    )
 }
 
 
@@ -175,10 +182,6 @@ def _build_user_prompt(input_data: Dict[str, Any], search_results: List[Dict[str
 - 회사명: {input_data.get("company_name", "")}
 - 부서: {input_data.get("department", "")}
 - 직무: {input_data.get("position", "")}
-- 프로젝트:
-{projects_text if projects_text else "  - 없음"}
-- 수상 이력:
-{awards_text if awards_text else "  - 없음"}
 
 웹 검색 결과:
 {search_context}
