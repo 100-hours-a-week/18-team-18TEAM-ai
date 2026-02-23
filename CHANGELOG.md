@@ -2,6 +2,14 @@
 
 <!-- version list -->
 
+## v0.5.0 (2026-02-23)
+
+### Features
+
+- Requirements.txt에 Pillow 패키지 추가
+  ([`431e2b7`](https://github.com/100-hours-a-week/18-team-18TEAM-ai/commit/431e2b726da70d04edef2efd887e6fb9a1b6b90d))
+
+
 ## v0.4.0 (2026-02-23)
 
 ### Features
