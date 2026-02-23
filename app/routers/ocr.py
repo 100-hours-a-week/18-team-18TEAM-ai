@@ -3,6 +3,7 @@ from __future__ import annotations
 import asyncio
 import time
 import base64
+from collections import deque
 import io
 import json
 import math
@@ -22,13 +23,11 @@ router = APIRouter()
 
 MIN_PIXELS = 256 * 28 * 28
 MAX_PIXELS = 1820 * 28 * 28
-DEFAULT_MODEL = os.getenv("VLLM_MODEL", "Qwen/Qwen2.5-VL-3B-Instruct")
+DEFAULT_MODEL = os.getenv("VLLM_MODE", "")
 PROCESS_START_MONOTONIC = time.perf_counter()
-_COLD_START_LOCK = asyncio.Lock()
-_FIRST_OCR_INFER_DONE = False
-_FIRST_OCR_INFER_MS: float | None = None
 
 
+# 이미지 픽셀 수 조정(토큰 수 조정 위함)
 def _resize_to_pixel_range(img: Image.Image, min_pixels: int, max_pixels: int) -> Image.Image:
     w, h = img.size
     pixels = w * h
@@ -45,6 +44,7 @@ def _resize_to_pixel_range(img: Image.Image, min_pixels: int, max_pixels: int) -
     return img.resize((new_w, new_h), resample=Image.LANCZOS)
 
 
+# 핸드폰 번호 출력 형식 정규화
 def normalize_korean_phone(s: str) -> str:
     if not s:
         return ""
@@ -111,6 +111,7 @@ def normalize_korean_phone(s: str) -> str:
     return ""
 
 
+# 없는 번호 공백으로 출력
 def postprocess_result(raw_response: Dict[str, Any]) -> Optional[Dict[str, Any]]:
     try:
         # 이미 파싱된 JSON 응답 또는 OpenAI raw choices 응답을 모두 허용한다.
@@ -248,29 +249,92 @@ async def _call_vllm(
     model: str,
     temperature: float,
     wait_for_ready: bool,
-) -> Optional[Dict[str, Any]]:
+) -> tuple[Optional[Dict[str, Any]], Dict[str, Any]]:
     client = VLLMClient()
-    return await client.generate_json(
-        messages=messages,
-        strict_json=True,
-        model=model,
-        temperature=temperature,
-        extra_body={"wait_for_ready": wait_for_ready},
-    )
+    if not client.client:
+        return None, {}
 
+    request_model = model or client.model
+    started = time.perf_counter()
+    ttft_ms: float | None = None
+    content_parts: list[str] = []
+    prompt_tokens: int | None = None
+    completion_tokens: int | None = None
 
-async def _consume_cold_start(infer_ms: float) -> Dict[str, Any]:
-    global _FIRST_OCR_INFER_DONE, _FIRST_OCR_INFER_MS
-    async with _COLD_START_LOCK:
-        is_cold_start_request = not _FIRST_OCR_INFER_DONE
-        if is_cold_start_request:
-            _FIRST_OCR_INFER_DONE = True
-            _FIRST_OCR_INFER_MS = infer_ms
-    return {
-        "is_cold_start_request": is_cold_start_request,
-        "first_infer_ms": _FIRST_OCR_INFER_MS,
+    # 1) 스트리밍 시도: TTFT를 실제로 측정
+    try:
+        stream = await client.client.chat.completions.create(
+            model=request_model,
+            messages=messages,
+            temperature=temperature,
+            response_format={"type": "json_object"},
+            extra_body={"wait_for_ready": wait_for_ready},
+            stream=True,
+            stream_options={"include_usage": True},
+        )
+        async for chunk in stream:
+            now = time.perf_counter()
+            usage = getattr(chunk, "usage", None)
+            if usage is not None:
+                prompt_tokens = getattr(usage, "prompt_tokens", prompt_tokens)
+                completion_tokens = getattr(usage, "completion_tokens", completion_tokens)
+
+            choices = getattr(chunk, "choices", None) or []
+            if not choices:
+                continue
+            delta = getattr(choices[0], "delta", None)
+            piece = getattr(delta, "content", None) if delta is not None else None
+            if piece is None:
+                continue
+
+            if ttft_ms is None:
+                ttft_ms = (now - started) * 1000
+            if isinstance(piece, str):
+                content_parts.append(piece)
+
+    except Exception:
+        # 2) 스트리밍 실패 시 일반 호출로 fallback
+        response = await client.client.chat.completions.create(
+            model=request_model,
+            messages=messages,
+            temperature=temperature,
+            response_format={"type": "json_object"},
+            extra_body={"wait_for_ready": wait_for_ready},
+        )
+        content = response.choices[0].message.content or ""
+        usage = getattr(response, "usage", None)
+        if usage is not None:
+            prompt_tokens = getattr(usage, "prompt_tokens", None)
+            completion_tokens = getattr(usage, "completion_tokens", None)
+        latency_ms = (time.perf_counter() - started) * 1000
+        parsed = client._parse_json(content)
+        output_tokens = completion_tokens if completion_tokens is not None else max(1, len(content) // 4)
+        return parsed, {
+            "ttft_ms": latency_ms,  # fallback에서는 first token을 따로 측정할 수 없어 전체 지연으로 대체
+            "latency_ms": latency_ms,
+            "output_tokens": output_tokens,
+            "time_per_output_token_ms": (latency_ms / output_tokens) if output_tokens > 0 else None,
+            "throughput_tps": (output_tokens / (latency_ms / 1000.0)) if latency_ms > 0 else None,
+            "prompt_tokens": prompt_tokens,
+            "completion_tokens": completion_tokens,
+            "ttft_is_estimated": True,
+        }
+
+    content = "".join(content_parts)
+    latency_ms = (time.perf_counter() - started) * 1000
+    parsed = client._parse_json(content)
+    output_tokens = completion_tokens if completion_tokens is not None else (max(1, len(content) // 4) if content else 0)
+
+    return parsed, {
+        "ttft_ms": ttft_ms,
+        "latency_ms": latency_ms,
+        "output_tokens": output_tokens,
+        "time_per_output_token_ms": (latency_ms / output_tokens) if output_tokens > 0 else None,
+        "throughput_tps": (output_tokens / (latency_ms / 1000.0)) if latency_ms > 0 and output_tokens > 0 else None,
+        "prompt_tokens": prompt_tokens,
+        "completion_tokens": completion_tokens,
+        "ttft_is_estimated": False,
     }
-
 
 def _safe_float(value: str | None) -> float | None:
     if value is None:
@@ -279,47 +343,6 @@ def _safe_float(value: str | None) -> float | None:
         return float(value)
     except (TypeError, ValueError):
         return None
-
-
-def _kv_vram_per_token_estimate() -> Dict[str, Any]:
-    """
-    KV-cache 기준 토큰당 VRAM 점유량을 추정한다.
-    식: 2(K,V) * layers * kv_heads * head_dim * dtype_bytes
-    """
-    layers = int(os.getenv("KV_NUM_LAYERS", "0"))
-    kv_heads = int(os.getenv("KV_NUM_HEADS", "0"))
-    head_dim = int(os.getenv("KV_HEAD_DIM", "0"))
-    dtype_bytes = int(os.getenv("KV_DTYPE_BYTES", "2"))  # fp16/bf16=2, fp8=1
-
-    if layers <= 0 or kv_heads <= 0 or head_dim <= 0 or dtype_bytes <= 0:
-        return {
-            "available": False,
-            "reason": "set KV_NUM_LAYERS, KV_NUM_HEADS, KV_HEAD_DIM, KV_DTYPE_BYTES",
-        }
-
-    bytes_per_token = 2 * layers * kv_heads * head_dim * dtype_bytes
-    mib_per_token = bytes_per_token / (1024 * 1024)
-
-    out: Dict[str, Any] = {
-        "available": True,
-        "bytes_per_token": bytes_per_token,
-        "mib_per_token": round(mib_per_token, 6),
-        "formula": "2 * layers * kv_heads * head_dim * dtype_bytes",
-        "params": {
-            "layers": layers,
-            "kv_heads": kv_heads,
-            "head_dim": head_dim,
-            "dtype_bytes": dtype_bytes,
-        },
-    }
-
-    gpu_vram_bytes = int(os.getenv("GPU_VRAM_BYTES", "0"))
-    reserve_bytes = int(os.getenv("GPU_RESERVE_BYTES", "0"))
-    if gpu_vram_bytes > reserve_bytes:
-        budget = gpu_vram_bytes - reserve_bytes
-        out["token_capacity_estimate"] = budget // bytes_per_token
-        out["capacity_budget_bytes"] = budget
-    return out
 
 
 # ============================================================
@@ -386,6 +409,7 @@ async def analyze_ocr_sync(
     _ = authorization
     _ = x_request_id
 
+    req_start = time.perf_counter()
     now_epoch_ms = time.time() * 1000
     client_upload_start_ms = _safe_float(x_client_upload_start_ms)
     client_request_start_ms = _safe_float(x_client_request_start_ms)
@@ -396,8 +420,8 @@ async def analyze_ocr_sync(
     image_data_url = _image_data_url_from_upload(file)
     messages = build_messages(image_data_url)
 
-    infer_start = time.perf_counter()
-    raw = await _call_vllm(
+    # infer_start = time.perf_counter()
+    raw, perf = await _call_vllm(
         messages=messages,
         model=model,
         temperature=temperature,
@@ -405,20 +429,23 @@ async def analyze_ocr_sync(
     )
     if raw is None:
         raise HTTPException(status_code=500, detail="vLLM returned no response")
-    infer_ms = (time.perf_counter() - infer_start) * 1000
-    cold_start = await _consume_cold_start(infer_ms)
+    # infer_ms = (time.perf_counter() - infer_start) * 1000
+    # cold_start = await _consume_cold_start(infer_ms)
 
     post = postprocess_result(raw)
     result = raw if return_raw or post is None else post
-    # postprocess_ms = (time.perf_counter() - postprocess_start) * 1000
-    # endpoint_total_ms = (time.perf_counter() - endpoint_start) * 1000
-    # process_uptime_ms = (time.perf_counter() - PROCESS_START_MONOTONIC) * 1000
 
-    # timing 출력이 필요하면 아래 블록을 복구
-    # "timing": {"infer_ms": infer_ms, "cold_start": cold_start, "vram_per_token_estimate": _kv_vram_per_token_estimate()}
+    server_processing_ms = (time.perf_counter() - req_start) * 1000
+    # 업로드 시작 시각 헤더가 있으면 더 사용자 체감에 가까운 값으로 계산
+    user_perceived_ms = (
+        now_epoch_ms - client_upload_start_ms
+        if client_upload_start_ms is not None
+        else server_processing_ms
+    )
+
     return OCRAnalyzeResponse(
         message="ok",
         data={
-            "result": result,
+            "result": result
         },
     )

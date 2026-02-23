@@ -7,11 +7,11 @@ from typing import Any, Dict, Optional
 
 from openai import AsyncOpenAI, APIConnectionError, APITimeoutError, RateLimitError, APIStatusError
 
-DEFAULT_TIMEOUT = 90 # 60 -> 100으로 상향 조정 
+DEFAULT_TIMEOUT = 100
 
 
 class VLLMClient:
-    DEFAULT_SYSTEM_PROMPT = "You are a helpful analyst." # 추가된 부분
+    DEFAULT_SYSTEM_PROMPT = "You are a helpful analyst."
 
     def __init__(self) -> None:
         # vLLM 엔드포인트 및 인증 정보를 환경변수에서 로드한다.
@@ -31,15 +31,15 @@ class VLLMClient:
 
     async def generate_json(
         self,
-        prompt: str = "", # 수정된 부분
+        prompt: str = "",
         strict_json: bool = True,
         max_retries: int = 2,
         timeout: int = DEFAULT_TIMEOUT,
-        messages: Optional[list[Dict[str, Any]]] = None, # 추가된 부분
-        system_prompt: str = DEFAULT_SYSTEM_PROMPT, # 추가된 부분
-        model: Optional[str] = None, # 추가된 부분
-        temperature: Optional[float] = None, # 추가된 부분
-        extra_body: Optional[Dict[str, Any]] = None, # 추가된 부분
+        messages: Optional[list[Dict[str, Any]]] = None,
+        system_prompt: str = DEFAULT_SYSTEM_PROMPT,
+        model: Optional[str] = None,
+        temperature: Optional[float] = None,
+        extra_body: Optional[Dict[str, Any]] = None,
     ) -> Optional[Dict[str, Any]]:
         # JSON 응답을 강제하고 재시도/타임아웃을 적용해 vLLM 응답을 파싱한다.
         if not self.client:
@@ -48,7 +48,7 @@ class VLLMClient:
         request_messages = messages or [
             {"role": "system", "content": system_prompt},
             {"role": "user", "content": self._wrap_prompt(prompt, strict_json)},
-        ] # 수정된 부분 (request_messages 준비) - messages가 주어지면 그것을 사용하고, 그렇지 않으면 기존 방식대로 system/user 메시지를 생성한다.
+        ]
 
         extra_kwargs: Dict[str, Any] = {}
         if strict_json:
@@ -58,11 +58,11 @@ class VLLMClient:
         while attempt <= max_retries:
             try:
                 response = await self.client.chat.completions.create(
-                    model=model or self.model, # 수정된 부분
-                    messages=request_messages, # 수정된 부분 (messages 대신 request_messages 사용)
+                    model=model or self.model,
+                    messages=request_messages,
                     timeout=timeout,
                     temperature=temperature,
-                    extra_body=extra_body, # 추가된 부분
+                    extra_body=extra_body,
                     **extra_kwargs,
                 )
                 content = response.choices[0].message.content or ""
