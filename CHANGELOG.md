@@ -2,6 +2,14 @@
 
 <!-- version list -->
 
+## v0.6.0 (2026-02-23)
+
+### Features
+
+- Requirements.txt에 python-multipart 패키지 추가
+  ([`616b633`](https://github.com/100-hours-a-week/18-team-18TEAM-ai/commit/616b63307284d869d6fadf3c5f834e4ea2d89526))
+
+
 ## v0.5.0 (2026-02-23)
 
 ### Features
