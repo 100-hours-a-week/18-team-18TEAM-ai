@@ -2,6 +2,14 @@
 
 <!-- version list -->
 
+## v0.7.0 (2026-02-23)
+
+### Features
+
+- Contextlib에서 asynccontextmanager 임포트 추가
+  ([`3515018`](https://github.com/100-hours-a-week/18-team-18TEAM-ai/commit/35150182520cd27bc7e0f015f3b8852d9beacb69))
+
+
 ## v0.6.0 (2026-02-23)
 
 ### Features
