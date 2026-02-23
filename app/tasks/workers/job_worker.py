@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import asyncio
-import json
 import os
 from typing import Any, Dict, List, Optional
 
@@ -12,22 +11,14 @@ import httpx
 from app.tasks.registry import register_worker
 from app.tasks.workers.base import BaseWorker
 from app.clients.vllm_client import VLLMClient
+from app.embedding.job_filter import JobRelevanceFilter
+from app.embedding.semantic_cache import SemanticCache
 
 
 # Tavily API 키
 TAVILY_API_KEY = os.getenv("TAVILY_API_KEY", "")
 
-# LLM 출력 스키마 힌트
-SCHEMA_HINT = {
-    "introduction": (
-        "안녕하세요, 저는 카카오 옵저버빌리티에서 백엔드 개발자로 근무하고 있는 "
-        "홍길동입니다. 우리 팀은 시스템의 내부 상태를 이해하고, 문제를 사전에 "
-        "식별 및 해결하기 위해 메트릭, 로그 및 추적을 수집하고 분석하는 역할을 "
-        "담당하고 있습니다. 저는 백엔드 개발자로서 웹사이트나 앱의 사용자가 볼 수 없는 "
-        "뒷단(서버, 데이터베이스, API)을 개발하고 관리하며, 사용자의 요청에 따라 데이터를 "
-        "처리하고 전달하는 역할을 하고 있습니다."
-    )
-}
+NOT_RELEVANT_RESPONSE = '{"result": "관련없음"}'
 
 
 def _build_search_query(input_data: Dict[str, Any]) -> str:
@@ -119,30 +110,28 @@ def _calculate_confidence(search_results: Optional[List[Dict[str, Any]]], input_
 
 def _build_system_prompt() -> str:
     """자기소개 생성용 시스템 프롬프트를 생성한다."""
-    return f"""너는 자기소개 작성 전문가다.
+    return f"""너는 소프트웨어 개발자 자기소개 작성 전문가다.
 
-입력 데이터:
-- 이름, 회사명, 부서, 직무 정보
-- 웹 검색 결과 (채용 공고, 기술 블로그, 직무 소개 등)
+[안전 규칙]
+직무(position)가 소프트웨어 개발과 무관하면 아래 JSON만 반환하고 자기소개를 생성하지 마라:
+{NOT_RELEVANT_RESPONSE}
+개발과 무관한 직무 예시: 마케팅, 영업, 인사, 총무, 경영기획, 채용담당자, 브랜드 매니저 등
+단, 부서가 비개발(인사팀, 피플팀 등)이더라도 직무가 개발 관련(HR 시스템 개발자, 데이터 엔지니어 등)이면 자기소개를 생성해라.
 
-목표:
-입력 데이터와 검색 결과를 종합하여 자연스러운 자기소개 문단을 작성한다.
+[출력 형식]
+반드시 아래 JSON만 출력. 마크다운·설명문 금지.
+{{"introduction": "자기소개 문단"}}
 
-출력 형식:
-반드시 아래 JSON 형식으로만 출력해라. 추가 설명 없이 JSON만 출력.
+[작성 가이드]
+1. 첫 문장: "안녕하세요, [회사] [부서]에서 [직무]로 근무하고 있는 [이름]입니다."
+2. 둘째 문장: 팀의 미션/역할을 검색 결과 기반으로 구체적으로 설명
+3. 셋째 문장: 본인 직무에서 실제로 하는 일을 구체적으로 기술
+4. 검색 결과에서 파악한 팀의 기술 스택이나 프로젝트를 자연스럽게 언급
 
-{json.dumps(SCHEMA_HINT, ensure_ascii=False, indent=2)}
-
-작성 가이드:
-1. 첫 문장: 인사 + 소속 + 이름 소개
-2. 두번째 문장: 팀의 미션/역할 설명
-3. 세번째 문장: 본인이 수행하는 구체적인 업무
-
-중요:
-- 반드시 유효한 JSON만 출력하고, 마크다운이나 설명문을 추가하지 말 것.
-- 검색 결과를 바탕으로 실제 해당 팀에서 하는 업무를 자연스럽게 녹여낼 것.
-- 딱딱한 공식 문서가 아닌, 실제 사람이 말하는 듯한 자연스러운 톤으로 작성할 것."""
-
+[톤]
+- 실제 사람이 말하는 듯 자연스럽고 친근한 톤
+- 검색 결과에서 팀의 실제 업무를 녹여낼 것
+- 직무 설명은 보편적이되 구체적으로 작성"""
 
 def _build_search_context(search_results: List[Dict[str, Any]]) -> str:
     """검색 결과를 문자열로 변환한다."""
@@ -159,34 +148,15 @@ def _build_user_prompt(input_data: Dict[str, Any], search_results: List[Dict[str
     """자기소개 생성용 사용자 프롬프트를 생성한다."""
     search_context = _build_search_context(search_results)
 
-    projects = input_data.get("projects", [])
-    projects_text = ""
-    if projects:
-        projects_text = "\n".join([
-            f"  - {p.get('name', '')}: {p.get('content', '')} ({p.get('period_months', 0)}개월)"
-            for p in projects
-        ])
-
-    awards = input_data.get("awards", [])
-    awards_text = ""
-    if awards:
-        awards_text = "\n".join([
-            f"  - {a.get('name', '')} ({a.get('year', '')})"
-            for a in awards
-        ])
-
     return f"""다음 정보를 바탕으로 자기소개를 작성해라.
 
-입력 데이터:
-- 이름: {input_data.get("name", "")}
-- 회사명: {input_data.get("company_name", "")}
-- 부서: {input_data.get("department", "")}
-- 직무: {input_data.get("position", "")}
+이름: {input_data.get("name", "")}
+회사: {input_data.get("company_name", "")}
+부서: {input_data.get("department", "")}
+직무: {input_data.get("position", "")}
 
-웹 검색 결과:
-{search_context}
-
-위 정보를 바탕으로 자연스러운 자기소개 JSON만 출력해라."""
+[웹 검색 결과]
+{search_context}"""
 
 
 @register_worker("job")
@@ -209,21 +179,50 @@ class JobWorker(BaseWorker):
                 "awards": self.payload.get("awards", []),
             }
 
-            # 1. 검색 쿼리 생성
+            # ── [1] 직무 필터 (임베딩 기반, LLM 호출 전 차단) ──
+            await self.update_progress("checking_job_relevance")
+            job_filter = JobRelevanceFilter()
+            filter_result = await job_filter.check(
+                input_data.get("department", ""),
+                input_data.get("position", ""),
+            )
+            if filter_result.blocked:
+                result = {
+                    "message": "not_relevant",
+                    "data": {
+                        "introduction": "",
+                        "search_confidence": 0.0,
+                        "reason": "부서 또는 직무가 소프트웨어 개발과 관련이 없습니다.",
+                        "filtered_by": "embedding_classifier",
+                    }
+                }
+                await self.mark_completed(result)
+                return result
+
+            # ── [2] 시맨틱 캐시 조회 ──
+            await self.update_progress("checking_cache")
+            cache = SemanticCache()
+            cached = await cache.lookup(input_data, task_type="job")
+            if cached is not None:
+                result = {"message": "ok", "data": cached}
+                await self.mark_completed(result)
+                return result
+
+            # 3. 검색 쿼리 생성
             await self.update_progress("building_search_query")
             search_query = _build_search_query(input_data)
 
-            # 2. Tavily Search API 호출 (동기 -> 스레드 위임)
+            # 4. Tavily Search API 호출 (동기 -> 스레드 위임)
             await self.update_progress("searching_web")
             search_results = await asyncio.to_thread(
                 _tavily_search_sync, search_query, 5
             ) or []
 
-            # 3. 신뢰도 계산
+            # 5. 신뢰도 계산
             await self.update_progress("calculating_confidence")
             confidence = _calculate_confidence(search_results, input_data)
 
-            # 4. LLM 호출
+            # 6. LLM 호출
             introduction = ""
             enable_llm = self.payload.get("options", {}).get("enable_llm", True)
 
@@ -232,9 +231,20 @@ class JobWorker(BaseWorker):
                 llm_result = await self._call_llm(input_data, search_results)
 
                 if llm_result:
+                    if llm_result.get("result") == "관련없음":
+                        result = {
+                            "message": "not_relevant",
+                            "data": {
+                                "introduction": "",
+                                "search_confidence": confidence,
+                                "reason": "부서 또는 직무가 소프트웨어 개발과 관련이 없습니다.",
+                            }
+                        }
+                        await self.mark_completed(result)
+                        return result
                     introduction = llm_result.get("introduction", introduction)
 
-            # 5. 결과 구성
+            # 7. 결과 구성
             result = {
                 "message": "ok",
                 "data": {
@@ -242,6 +252,10 @@ class JobWorker(BaseWorker):
                     "search_confidence": confidence,
                 }
             }
+
+            # ── [8] 시맨틱 캐시 저장 ──
+            if introduction:
+                await cache.store(input_data, result["data"], task_type="job")
 
             await self.mark_completed(result)
             return result

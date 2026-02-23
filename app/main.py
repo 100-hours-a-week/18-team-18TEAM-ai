@@ -13,6 +13,12 @@ from app.routers import ocr as ocr_router # 추가된 ocr
 
 from app.routers import tasks as tasks_router
 
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    # 시작: 임베딩 서비스 초기화 (Milvus 컬렉션 생성 + 시드 데이터 로드)
+    from app.embedding import init_embedding
+    await init_embedding()
+    yield
 
 
 def create_app() -> FastAPI:
