@@ -2,6 +2,23 @@
 
 <!-- version list -->
 
+## v0.4.0 (2026-02-23)
+
+### Features
+
+- 임베딩 기반 직무 필터링 및 시맨틱 캐싱 모듈 구현
+  ([`b08fa11`](https://github.com/100-hours-a-week/18-team-18TEAM-ai/commit/b08fa11ec7b98dcf524bdcace3982ead38fd14df))
+
+- 임베딩 서비스 HTTP 클라이언트 구현
+  ([`a13c7ec`](https://github.com/100-hours-a-week/18-team-18TEAM-ai/commit/a13c7ec15d9a058ad3425df5e71f716f7d9f3900))
+
+- 임베딩 서비스 초기화 기능 추가
+  ([`48fa872`](https://github.com/100-hours-a-week/18-team-18TEAM-ai/commit/48fa872e09b274821c747fe770d3f8e3481e4669))
+
+- 직무 필터링 및 시맨틱 캐시 기능 추가
+  ([`dee41cb`](https://github.com/100-hours-a-week/18-team-18TEAM-ai/commit/dee41cba89e23a4253663c725a153b706ce4f1dc))
+
+
 ## v0.3.0 (2026-02-08)
 
 ### Bug Fixes
