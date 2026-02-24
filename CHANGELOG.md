@@ -2,6 +2,14 @@
 
 <!-- version list -->
 
+## v0.8.0 (2026-02-24)
+
+### Features
+
+- VLLMClient을 VLMClient로 변경 및 환경변수 사용 개선
+  ([`3f90576`](https://github.com/100-hours-a-week/18-team-18TEAM-ai/commit/3f90576fa9d8396611a9cef704c35a73a218fdbb))
+
+
 ## v0.7.0 (2026-02-23)
 
 ### Features
