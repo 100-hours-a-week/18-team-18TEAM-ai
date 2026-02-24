@@ -17,13 +17,13 @@ from PIL import Image
 from app.schemas import TaskSubmitResponse, TaskStatus, OCRAnalyzeResponse
 from app.tasks.models import TaskType
 from app.tasks.producer import get_producer
-from app.clients.vllm_client import VLLMClient
+from app.clients.vllm_client import VLMClient
 
 router = APIRouter()
 
 MIN_PIXELS = 256 * 28 * 28
 MAX_PIXELS = 1820 * 28 * 28
-DEFAULT_MODEL = os.getenv("VLLM_MODE", "")
+DEFAULT_MODEL = os.getenv("VLM_MODEL", "")
 PROCESS_START_MONOTONIC = time.perf_counter()
 
 
@@ -250,7 +250,7 @@ async def _call_vllm(
     temperature: float,
     wait_for_ready: bool,
 ) -> tuple[Optional[Dict[str, Any]], Dict[str, Any]]:
-    client = VLLMClient()
+    client = VLMClient()
     if not client.client:
         return None, {}
 

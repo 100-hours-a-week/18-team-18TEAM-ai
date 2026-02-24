@@ -13,7 +13,7 @@ from typing import Any, Dict, Optional
 
 from app.tasks.registry import register_worker
 from app.tasks.workers.base import BaseWorker
-from app.clients.vllm_client import VLLMClient
+from app.clients.vllm_client import VLMClient
 
 TAIL_LATENCY_WINDOW_SIZE = int(os.getenv("OCR_TAIL_LATENCY_WINDOW_SIZE", "200"))
 _LATENCY_WINDOW = deque(maxlen=TAIL_LATENCY_WINDOW_SIZE)
@@ -236,7 +236,7 @@ async def call_vllm(
     temperature: Optional[float] = None,
     wait_for_ready: bool = True,
 ) -> tuple[Optional[Dict[str, Any]], Dict[str, Any]]:
-    client = VLLMClient()
+    client = VLMClient()
     started = time.perf_counter()
     parsed = await client.generate_json(
         messages=messages,
