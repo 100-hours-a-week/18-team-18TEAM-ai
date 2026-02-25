@@ -1,11 +1,17 @@
 from __future__ import annotations
 
+import logging
 import os
 from contextlib import asynccontextmanager
 
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from dotenv import load_dotenv
+
+logging.basicConfig(
+    level=logging.INFO,
+    format="%(asctime)s [%(levelname)s] %(name)s: %(message)s",
+)
 
 
 from app.routers import hex as hex_router
@@ -25,7 +31,7 @@ async def lifespan(app: FastAPI):
 def create_app() -> FastAPI:
     # FastAPI 앱과 공통 미들웨어/라우터를 구성한다.
     load_dotenv()
-    app = FastAPI(title="18-team-18TEAM-ai", version="0.1.0")
+    app = FastAPI(title="18-team-18TEAM-ai", version="0.1.0", lifespan=lifespan)
 
     app.add_middleware(
         CORSMiddleware,
