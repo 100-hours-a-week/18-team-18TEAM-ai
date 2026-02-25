@@ -2,6 +2,14 @@
 
 <!-- version list -->
 
+## v0.9.0 (2026-02-25)
+
+### Features
+
+- 로깅 설정 추가 및 FastAPI 앱의 lifespan 인자 설정
+  ([`020c50e`](https://github.com/100-hours-a-week/18-team-18TEAM-ai/commit/020c50eb409cff501fb0205be213ce942312be73))
+
+
 ## v0.8.0 (2026-02-24)
 
 ### Features
