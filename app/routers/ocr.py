@@ -124,6 +124,13 @@ def postprocess_result(raw_response: Dict[str, Any]) -> Optional[Dict[str, Any]]
             result = json.loads(content)
         else:
             result = dict(raw_response)
+        if result.get("is_business_card") is False:
+            # 명함이 아닐 때는 최소 필드만 유지
+            result = {
+                "is_business_card": False
+                
+            }
+            return result
         mobile = normalize_korean_phone(result.get("mobile_phone", ""))
         company = normalize_korean_phone(result.get("company_phone", ""))
         if company == mobile or (company.startswith("010") and mobile):
