@@ -11,19 +11,21 @@ import os
 import re
 from typing import Any, Dict, Optional
 
-from fastapi import APIRouter, File, Form, Header, HTTPException, UploadFile
-from PIL import Image
+import httpx
+from fastapi import APIRouter, Form, Header, HTTPException
+from PIL import Image, ImageOps
 
 from app.schemas import TaskSubmitResponse, TaskStatus, OCRAnalyzeResponse
 from app.tasks.models import TaskType
 from app.tasks.producer import get_producer
-from app.clients.vllm_client import VLMClient
+from app.clients.vllm_client import VLLMClient
 
 router = APIRouter()
 
-MIN_PIXELS = 256 * 28 * 28
+MIN_PIXELS = 1820 * 28 * 28
 MAX_PIXELS = 1820 * 28 * 28
-DEFAULT_MODEL = os.getenv("VLM_MODEL", "")
+DEFAULT_MODEL = os.getenv("VLLM_MODEL", "")
+MAX_IMAGE_DOWNLOAD_BYTES = int(os.getenv("OCR_MAX_IMAGE_BYTES", str(15 * 1024 * 1024)))
 PROCESS_START_MONOTONIC = time.perf_counter()
 
 
@@ -232,16 +234,50 @@ def build_messages(image_data_url: str) -> list[dict[str, Any]]:
         },
     ]
 
-def _image_data_url_from_upload(file: UploadFile) -> str:
-    img_bytes = file.file.read()
+async def _image_data_url_from_url(image_url: str) -> str:
+    if not image_url:
+        raise HTTPException(status_code=400, detail="image_url is required")
+    if not image_url.startswith(("http://", "https://")):
+        raise HTTPException(status_code=400, detail="image_url must start with http:// or https://")
+
+    headers = {
+        "User-Agent": "Mozilla/5.0 OCRFetcher/1.0",
+        "Accept": "image/*,*/*;q=0.8",
+    }
+
+    try:
+        # URL 다운로드 (비동기 + 리다이렉트 허용)
+        async with httpx.AsyncClient(timeout=30, follow_redirects=True) as client: # 다운로드를 비동기로 시행
+            resp = await client.get(image_url, headers=headers)
+            resp.raise_for_status()
+            content_type = (resp.headers.get("content-type") or "").lower()
+            img_bytes = resp.content
+    except httpx.HTTPStatusError as e:
+        raise HTTPException(status_code=400, detail=f"image_url fetch failed: HTTP {e.response.status_code}") from e
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=f"image_url fetch failed: {type(e).__name__}") from e
+
     if not img_bytes:
-        raise HTTPException(status_code=400, detail="empty file")
-    img = Image.open(io.BytesIO(img_bytes)).convert("RGB")
+        raise HTTPException(status_code=400, detail="empty image_url content")
+    if len(img_bytes) > MAX_IMAGE_DOWNLOAD_BYTES:
+        raise HTTPException(status_code=413, detail="image_url content too large")
+    if content_type and not content_type.startswith("image/"):
+        raise HTTPException(status_code=400, detail=f"image_url is not an image (content-type={content_type})")
+
+    try:
+        # 이미지 디코딩 + EXIF 회전 보정 + RGB 변환
+        img = Image.open(io.BytesIO(img_bytes)) # 바이트를 실제 이미지로 “디코딩”해서 PIL 이미지 객체로 만듦
+        img = ImageOps.exif_transpose(img).convert("RGB") # 회전 정보를 실제 픽셀에 반영 , convert("RGB")
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=f"failed to decode image_url content: {type(e).__name__}") from e
+
     img = _resize_to_pixel_range(img, MIN_PIXELS, MAX_PIXELS)
+    
+    # PNG로 재인코딩 (무손실) + base64
     buf = io.BytesIO()
-    img.save(buf, format="JPEG", quality=95)
+    img.save(buf, format="PNG")
     b64 = base64.b64encode(buf.getvalue()).decode("utf-8")
-    return f"data:image/jpeg;base64,{b64}"
+    return f"data:image/png;base64,{b64}"
 
 
 async def _call_vllm(
@@ -250,9 +286,12 @@ async def _call_vllm(
     temperature: float,
     wait_for_ready: bool,
 ) -> tuple[Optional[Dict[str, Any]], Dict[str, Any]]:
-    client = VLMClient()
+    client = VLLMClient()
     if not client.client:
-        return None, {}
+        raise HTTPException(
+            status_code=500,
+            detail="vLLM is not configured (check VLLM_BASE_URL/VLLM_MODEL)",
+        )
 
     request_model = model or client.model
     started = time.perf_counter()
@@ -351,7 +390,7 @@ def _safe_float(value: str | None) -> float | None:
 
 @router.post("/ocr/analyze", response_model=TaskSubmitResponse)
 async def analyze_ocr_async(
-    file: UploadFile = File(...),
+    image_url: str = Form(...),
     model: str = Form(default=DEFAULT_MODEL),
     temperature: float = Form(default=0.0),
     wait_for_ready: bool = Form(default=True),
@@ -363,10 +402,7 @@ async def analyze_ocr_async(
     _ = authorization
     _ = x_request_id
 
-    if file is None:
-        raise HTTPException(status_code=400, detail="file is required")
-
-    image_data_url = _image_data_url_from_upload(file)
+    image_data_url = await _image_data_url_from_url(image_url)
 
     producer = get_producer()
     record = await producer.submit(
@@ -388,14 +424,13 @@ async def analyze_ocr_async(
         poll_url=f"/ai/tasks/{record.task_id}",
     )
 
-
 # ============================================================
 # 기존 동기 작업
 # ============================================================
 
 @router.post("/ocr/analyze/sync", response_model=OCRAnalyzeResponse)
 async def analyze_ocr_sync(
-    file: UploadFile = File(...),
+    image_url: str = Form(...),
     model: str = Form(default=DEFAULT_MODEL),
     temperature: float = Form(default=0.0),
     wait_for_ready: bool = Form(default=True),
@@ -414,10 +449,7 @@ async def analyze_ocr_sync(
     client_upload_start_ms = _safe_float(x_client_upload_start_ms)
     client_request_start_ms = _safe_float(x_client_request_start_ms)
 
-    if file is None:
-        raise HTTPException(status_code=400, detail="file is required")
-
-    image_data_url = _image_data_url_from_upload(file)
+    image_data_url = await _image_data_url_from_url(image_url)
     messages = build_messages(image_data_url)
 
     # infer_start = time.perf_counter()
