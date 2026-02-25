@@ -5,7 +5,7 @@ from __future__ import annotations
 import logging
 
 from app.clients.embedding_client import EmbeddingClient
-from app.embedding.seed_data import DEV_ROLES, IRRELEVANT_ROLES, NON_DEV_ROLES
+from app.embedding.seed_data import BOOTCAMP_STUDENT_ROLES, DEV_ROLES, INSTRUCTOR_ROLES, IRRELEVANT_ROLES, NON_DEV_ROLES
 
 logger = logging.getLogger(__name__)
 
@@ -39,6 +39,11 @@ async def init_embedding() -> None:
     except Exception as e:
         logger.warning("시드 데이터 로드 실패: %s", e)
 
+    try:
+        await _seed_instructors(client)
+    except Exception as e:
+        logger.warning("강사 시드 데이터 로드 실패: %s", e)
+
 
 async def _seed_job_roles(client: EmbeddingClient) -> None:
     """개발/비개발 직무 시드 데이터를 job_roles 컬렉션에 삽입한다."""
@@ -50,7 +55,8 @@ async def _seed_job_roles(client: EmbeddingClient) -> None:
             limit=1,
         )
         if existing:
-            logger.info("job_roles 시드 데이터 이미 존재 - 스킵")
+            logger.info("job_roles 시드 데이터 이미 존재 - 부트캠프 수강생 데이터만 체크")
+            await _seed_bootcamp_students(client)
             return
     except Exception:
         pass  # 컬렉션이 비어있으면 에러가 날 수 있음
@@ -73,10 +79,22 @@ async def _seed_job_roles(client: EmbeddingClient) -> None:
         for role in IRRELEVANT_ROLES
     ]
 
-    all_items = dev_items + non_dev_items + irrelevant_items
+    # 부트캠프/교육기관 강사 직무 삽입
+    instructor_items = [
+        {"text": role, "category": "instructor", "metadata": {"source": "seed"}}
+        for role in INSTRUCTOR_ROLES
+    ]
+
+    # 부트캠프 수강생 회사명 삽입
+    bootcamp_items = [
+        {"text": role, "category": "bootcamp_student", "metadata": {"source": "seed"}}
+        for role in BOOTCAMP_STUDENT_ROLES
+    ]
+
+    all_items = dev_items + non_dev_items + irrelevant_items + instructor_items + bootcamp_items
     logger.info(
-        "시드 데이터 로드 중: dev=%d, non_dev=%d, irrelevant=%d",
-        len(dev_items), len(non_dev_items), len(irrelevant_items),
+        "시드 데이터 로드 중: dev=%d, non_dev=%d, irrelevant=%d, instructor=%d, bootcamp_student=%d",
+        len(dev_items), len(non_dev_items), len(irrelevant_items), len(instructor_items), len(bootcamp_items),
     )
 
     await client.insert(
@@ -85,3 +103,55 @@ async def _seed_job_roles(client: EmbeddingClient) -> None:
         auto_embed=True,
     )
     logger.info("시드 데이터 로드 완료: 총 %d건", len(all_items))
+
+
+async def _seed_instructors(client: EmbeddingClient) -> None:
+    """instructor 시드 데이터가 없으면 추가한다 (기존 데이터 보존)."""
+    try:
+        existing = await client.search(
+            collection_name="job_roles",
+            query="강사",
+            limit=1,
+        )
+        if existing and existing[0].get("category") == "instructor":
+            logger.info("instructor 시드 데이터 이미 존재 - 스킵")
+            return
+    except Exception:
+        pass
+
+    instructor_items = [
+        {"text": role, "category": "instructor", "metadata": {"source": "seed"}}
+        for role in INSTRUCTOR_ROLES
+    ]
+    await client.insert(
+        collection_name="job_roles",
+        items=instructor_items,
+        auto_embed=True,
+    )
+    logger.info("instructor 시드 데이터 로드 완료: %d건", len(instructor_items))
+
+
+async def _seed_bootcamp_students(client: EmbeddingClient) -> None:
+    """bootcamp_student 시드 데이터가 없으면 추가한다 (기존 데이터 보존)."""
+    try:
+        existing = await client.search(
+            collection_name="job_roles",
+            query="삼성 SSAFY",
+            limit=1,
+        )
+        if existing and existing[0].get("category") == "bootcamp_student":
+            logger.info("bootcamp_student 시드 데이터 이미 존재 - 스킵")
+            return
+    except Exception:
+        pass
+
+    bootcamp_items = [
+        {"text": role, "category": "bootcamp_student", "metadata": {"source": "seed"}}
+        for role in BOOTCAMP_STUDENT_ROLES
+    ]
+    await client.insert(
+        collection_name="job_roles",
+        items=bootcamp_items,
+        auto_embed=True,
+    )
+    logger.info("bootcamp_student 시드 데이터 로드 완료: %d건", len(bootcamp_items))

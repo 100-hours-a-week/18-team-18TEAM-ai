@@ -120,6 +120,29 @@ def _calculate_confidence(search_results: Optional[List[Dict[str, Any]]], input_
     return round(confidence, 2)
 
 
+def _build_bootcamp_student_system_prompt() -> str:
+    """부트캠프 수강생용 시스템 프롬프트 — 개발자 지망생 자기소개 생성."""
+    return f"""너는 개발자 취업을 목표로 하는 부트캠프 수강생의 자기소개를 작성하는 전문가다.
+
+[핵심 전제]
+- 이 사람은 현직 개발자가 아니라 개발자를 목표로 공부 중인 수강생이다.
+- "근무하고 있습니다" 표현을 절대 사용하지 마라.
+
+[출력 형식]
+반드시 아래 JSON만 출력. 마크다운·설명문 금지.
+{{"introduction": "자기소개 문단"}}
+
+[작성 가이드]
+1. 첫 문장: "[부트캠프명]에서 [목표직무] 개발자가 되기 위해 공부하고 있는 [이름]입니다."
+   - 목표직무는 부서/직무 정보에서 파악 (예: 백엔드, 프론트엔드, 풀스택, AI 등)
+   - 부트캠프명은 회사 필드 사용
+2. 웹 검색 결과가 있으면 부트캠프의 커리큘럼이나 기술 스택을 자연스럽게 언급
+3. 개발자를 목표로 삼은 의지나 방향성을 간략히 서술
+
+[톤]
+- 열정적이고 성장 의지가 드러나는 긍정적이고 자연스러운 문체"""
+
+
 def _build_system_prompt() -> str:
     """자기소개 생성용 시스템 프롬프트를 생성한다."""
     return f"""너는 소프트웨어 개발자 자기소개 작성 전문가다.
@@ -227,7 +250,7 @@ async def analyze_job(
 
     # ── [1] 직무 필터 (임베딩 기반, LLM 호출 전 차단) ──
     job_filter = JobRelevanceFilter()
-    filter_result = await job_filter.check(payload.department, payload.position)
+    filter_result = await job_filter.check(payload.department, payload.position, payload.company)
     if filter_result.blocked:
         data = {
             "introduction": "",
@@ -258,7 +281,10 @@ async def analyze_job(
     if payload.options.enable_llm:
         # vLLM 클라이언트로 자기소개 생성
         client = VLLMClient()
-        system_prompt = _build_system_prompt()
+        if filter_result.bootcamp_type == "student":
+            system_prompt = _build_bootcamp_student_system_prompt()
+        else:
+            system_prompt = _build_system_prompt()
         user_prompt = _build_user_prompt(input_data, search_results)
 
         # vLLM 서버에 JSON 응답 요청 (비동기)
@@ -321,9 +347,14 @@ async def analyze_job_debug(
     # 3. 검색 결과 기반 신뢰도 계산
     confidence = _calculate_confidence(search_results, input_data)
 
-    # LLM 프롬프트 준비
+    # LLM 프롬프트 준비 (부트캠프 수강생 여부에 따라 프롬프트 분기)
+    job_filter = JobRelevanceFilter()
+    filter_result = await job_filter.check(payload.department, payload.position, payload.company)
     client = VLLMClient()
-    system_prompt = _build_system_prompt()
+    if filter_result.bootcamp_type == "student":
+        system_prompt = _build_bootcamp_student_system_prompt()
+    else:
+        system_prompt = _build_system_prompt()
     user_prompt = _build_user_prompt(input_data, search_results)
 
     # vLLM 서버 호출 (비동기)
@@ -336,6 +367,7 @@ async def analyze_job_debug(
     return {
         "message": "debug_response",
         "debug": {
+            "bootcamp_type": filter_result.bootcamp_type,
             "env": {
                 "TAVILY_API_KEY": "SET" if TAVILY_API_KEY else "NOT_SET",
                 "VLLM_BASE_URL": os.getenv("VLLM_BASE_URL", "NOT_SET"),
