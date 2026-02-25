@@ -2,6 +2,14 @@
 
 <!-- version list -->
 
+## v0.10.0 (2026-02-25)
+
+### Features
+
+- 부트캠프 수강생 및 강사 관련 직무 필터링 로직 추가
+  ([`02aab0b`](https://github.com/100-hours-a-week/18-team-18TEAM-ai/commit/02aab0b344502ca124ee070c091270dde5ea5791))
+
+
 ## v0.9.0 (2026-02-25)
 
 ### Features
