@@ -279,8 +279,12 @@ async def analyze_job(
 
         # vLLM 서버에 JSON 응답 요청 (비동기)
         llm_response = await client.generate_json(
-            f"{system_prompt}\n\n{user_prompt}",
+            messages=[
+                {"role": "system", "content": system_prompt},
+                {"role": "user", "content": user_prompt},
+            ],
             strict_json=payload.options.strict_json,
+            extra_body={"chat_template_kwargs": {"enable_thinking": True}},
         )
 
         # LLM 응답에서 introduction 추출
@@ -346,8 +350,12 @@ async def analyze_job_debug(
 
     # vLLM 서버 호출 (비동기)
     llm_response = await client.generate_json(
-        f"{system_prompt}\n\n{user_prompt}",
+        messages=[
+            {"role": "system", "content": system_prompt},
+            {"role": "user", "content": user_prompt},
+        ],
         strict_json=payload.options.strict_json,
+        extra_body={"chat_template_kwargs": {"enable_thinking": False}},
     )
 
     # 디버그 정보 반환

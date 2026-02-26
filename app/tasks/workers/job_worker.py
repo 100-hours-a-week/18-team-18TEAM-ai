@@ -303,6 +303,10 @@ class JobWorker(BaseWorker):
         strict_json = self.payload.get("options", {}).get("strict_json", True)
 
         return await client.generate_json(
-            f"{system_prompt}\n\n{user_prompt}",
+            messages=[
+                {"role": "system", "content": system_prompt},
+                {"role": "user", "content": user_prompt},
+            ],
             strict_json=strict_json,
+            extra_body={"chat_template_kwargs": {"enable_thinking": True}},
         )
