@@ -125,12 +125,12 @@ class JobRelevanceFilter:
             )
 
         # 규칙 2: instructor 감지 — bootcamp_student보다 먼저 검사
-        # position이 강사/튜터/멘토이면 company가 부트캠프여도 일반 개발자로 처리
+        # position이 강사/튜터/멘토이면 company가 부트캠프여도 강사로 처리
         if pos_dist >= BLOCK_THRESHOLD and pos_cat == "instructor":
             return FilterResult(
                 blocked=False, confidence=pos_dist,
                 nearest_role=pos_title, nearest_category=pos_cat,
-                bootcamp_type=None,
+                bootcamp_type="instructor",
             )
 
         # 규칙 3: bootcamp_student 감지 — dev 규칙보다 먼저 검사
