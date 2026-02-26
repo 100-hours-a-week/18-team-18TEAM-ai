@@ -22,7 +22,7 @@ from app.clients.vllm_client import VLLMClient
 
 router = APIRouter()
 
-MIN_PIXELS = 1820 * 28 * 28
+MIN_PIXELS = 256 * 28 * 28
 MAX_PIXELS = 1820 * 28 * 28
 DEFAULT_MODEL = os.getenv("VLLM_MODEL", "")
 MAX_IMAGE_DOWNLOAD_BYTES = int(os.getenv("OCR_MAX_IMAGE_BYTES", str(15 * 1024 * 1024)))
@@ -133,8 +133,18 @@ def postprocess_result(raw_response: Dict[str, Any]) -> Optional[Dict[str, Any]]
             return result
         mobile = normalize_korean_phone(result.get("mobile_phone", ""))
         company = normalize_korean_phone(result.get("company_phone", ""))
-        if company == mobile or (company.startswith("010") and mobile):
-            company = ""
+        if not mobile and not company:
+            result["mobile_phone"] = ""
+            result["company_phone"] = ""
+            return result
+        if not mobile:
+            result["mobile_phone"] = ""
+            result["company_phone"] = company
+            return result
+        if not company:
+            result["mobile_phone"] = mobile
+            result["company_phone"] = ""
+            return result
         result["mobile_phone"] = mobile
         result["company_phone"] = company
         return result
@@ -207,6 +217,11 @@ def build_messages(image_data_url: str) -> list[dict[str, Any]]:
                         "Evaluate the image holistically using BOTH textual information\n"
                         "and visual characteristics.\n\n"
                         "────────────────────\n"
+                        "[Phone Number Interpretation Rules]\n"
+                        "────────────────────\n"
+                        "- Any number beginning with \"+82 10\" (with or without spaces or hyphens) MUST be treated as a mobile phone number.\n"
+                        "- If only one of mobile_phone or company_phone is present, return only that one and leave the other empty.\n\n"
+                        "────────────────────\n"
                         "[Output Format]\n"
                         "────────────────────\n\n"
                         "Always output a single JSON object.\n\n"
@@ -224,6 +239,8 @@ def build_messages(image_data_url: str) -> list[dict[str, Any]]:
                         "{\n"
                         "  \"is_business_card\": true,\n"
                         "  \"name\": \"\",\n"
+                        "  \"job_title\": \"\",\n"
+                        "  \"department\": \"\",\n"
                         "  \"email\": \"\",\n"
                         "  \"company_phone\": \"\",\n"
                         "  \"mobile_phone\": \"\"\n"
