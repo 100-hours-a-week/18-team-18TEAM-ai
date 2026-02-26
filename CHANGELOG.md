@@ -2,6 +2,23 @@
 
 <!-- version list -->
 
+## v0.11.0 (2026-02-26)
+
+### Features
+
+- Tavily API 키 목록 및 한도 초과 감지 로직 개선
+  ([`3945a88`](https://github.com/100-hours-a-week/18-team-18TEAM-ai/commit/3945a8813f86173802429574139f8117be14aa30))
+
+- VLLM 서버에 대한 메시지 포맷 개선 및 추가 옵션 설정
+  ([`a509ba5`](https://github.com/100-hours-a-week/18-team-18TEAM-ai/commit/a509ba552e63fe40dedcc3109d6fa5c7b975fe24))
+
+- 부트캠프 관련 자기소개 형식 개선 및 LLM 응답 설정 수정
+  ([`96e5610`](https://github.com/100-hours-a-week/18-team-18TEAM-ai/commit/96e5610866ffb1d31622886370592d96d4665662))
+
+- 부트캠프 수강생 및 강사에 대한 검색 쿼리 및 프롬프트 로직 개선
+  ([`5615162`](https://github.com/100-hours-a-week/18-team-18TEAM-ai/commit/561516242ad8f36ccc1606db66750c7f79d2f214))
+
+
 ## v0.10.0 (2026-02-25)
 
 ### Features
