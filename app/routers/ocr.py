@@ -239,6 +239,7 @@ def build_messages(image_data_url: str) -> list[dict[str, Any]]:
                         "{\n"
                         "  \"is_business_card\": true,\n"
                         "  \"name\": \"\",\n"
+                        "  \"company\": \"\",\n"
                         "  \"job_title\": \"\",\n"
                         "  \"department\": \"\",\n"
                         "  \"email\": \"\",\n"
