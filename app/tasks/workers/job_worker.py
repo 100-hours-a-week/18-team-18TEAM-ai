@@ -15,8 +15,15 @@ from app.embedding.job_filter import JobRelevanceFilter
 from app.embedding.semantic_cache import SemanticCache
 
 
-# Tavily API 키
-TAVILY_API_KEY = os.getenv("TAVILY_API_KEY", "")
+# Tavily API 키 목록 (환경변수에서 로드, 빈 값 제외)
+TAVILY_API_KEYS = [k for k in [
+    os.getenv("TAVILY_API_KEY", ""),
+    os.getenv("TAVILY_API_KEY_2", ""),
+] if k]
+
+# 한도 초과 감지 상태 코드
+# 432: Tavily 월 한도 초과 커스텀 코드, 429: 분당 rate limit
+_TAVILY_QUOTA_STATUS_CODES = {429, 432}
 
 NOT_RELEVANT_RESPONSE = '{"result": "관련없음"}'
 
@@ -40,14 +47,11 @@ def _build_search_query(input_data: Dict[str, Any], bootcamp_type: str | None = 
     return " ".join(base_query.split())
 
 
-def _tavily_search_sync(query: str, num_results: int = 5) -> Optional[List[Dict[str, Any]]]:
-    """Tavily Search API를 동기 방식으로 호출한다."""
-    if not TAVILY_API_KEY:
-        return None
-
+def _try_tavily_key_sync(api_key: str, query: str, num_results: int) -> Optional[List[Dict[str, Any]]]:
+    """단일 키로 Tavily API를 동기 호출한다. 한도 초과 시 None 반환."""
     url = "https://api.tavily.com/search"
     payload = {
-        "api_key": TAVILY_API_KEY,
+        "api_key": api_key,
         "query": query,
         "max_results": num_results,
         "search_depth": "basic",
@@ -55,27 +59,32 @@ def _tavily_search_sync(query: str, num_results: int = 5) -> Optional[List[Dict[
         "include_raw_content": False,
         "include_images": False
     }
-
     try:
         with httpx.Client(timeout=15) as client:
             response = client.post(url, json=payload)
+            if response.status_code in _TAVILY_QUOTA_STATUS_CODES:
+                return None  # 다음 키로 폴백
             response.raise_for_status()
-
-            data = response.json()
-            search_results = []
-
-            for item in data.get("results", []):
-                search_results.append({
+            return [
+                {
                     "title": item.get("title", ""),
                     "snippet": item.get("content", ""),
                     "url": item.get("url", ""),
                     "score": item.get("score", 0.0)
-                })
-
-            return search_results
-
+                }
+                for item in response.json().get("results", [])
+            ]
     except Exception:
         return None
+
+
+def _tavily_search_sync(query: str, num_results: int = 5) -> Optional[List[Dict[str, Any]]]:
+    """Tavily Search API를 동기 방식으로 호출한다. 키 한도 초과 시 다음 키로 폴백."""
+    for api_key in TAVILY_API_KEYS:
+        result = _try_tavily_key_sync(api_key, query, num_results)
+        if result is not None:
+            return result
+    return None
 
 
 def _calculate_confidence(search_results: Optional[List[Dict[str, Any]]], input_data: Dict[str, Any]) -> float:
