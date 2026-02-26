@@ -4,9 +4,13 @@ import logging
 import os
 from contextlib import asynccontextmanager
 
+from dotenv import load_dotenv
+
+# 모듈 임포트 전에 .env 로드 (각 모듈의 os.getenv가 올바른 값을 읽도록)
+load_dotenv()
+
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
-from dotenv import load_dotenv
 
 logging.basicConfig(
     level=logging.INFO,
