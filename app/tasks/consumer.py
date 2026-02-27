@@ -69,6 +69,9 @@ class TaskConsumer:
                 break
             except Exception as e:
                 logger.error(f"Consumer error: {e}")
+                if "NOGROUP" in str(e):
+                    logger.info("Recreating consumer groups due to NOGROUP error...")
+                    await self._ensure_consumer_groups(task_types, group)
                 await asyncio.sleep(1)
 
         logger.info(f"Consumer {self.worker_id} stopped.")
