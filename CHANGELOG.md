@@ -2,6 +2,14 @@
 
 <!-- version list -->
 
+## v0.14.0 (2026-02-27)
+
+### Features
+
+- VLLMClient에서 max_retries 기본값을 1로 변경하고 AsyncOpenAI 클라이언트에 max_retries=0 추가
+  ([`6453e23`](https://github.com/100-hours-a-week/18-team-18TEAM-ai/commit/6453e2379c2582a54cb700e8e016761c02f3f5a3))
+
+
 ## v0.13.0 (2026-02-27)
 
 ### Features
