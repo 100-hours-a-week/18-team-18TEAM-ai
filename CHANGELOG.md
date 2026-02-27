@@ -2,6 +2,14 @@
 
 <!-- version list -->
 
+## v0.12.0 (2026-02-27)
+
+### Features
+
+- Test
+  ([`543e5e7`](https://github.com/100-hours-a-week/18-team-18TEAM-ai/commit/543e5e7dc4bc44ae0495c869f772d238a825a09a))
+
+
 ## v0.11.0 (2026-02-26)
 
 ### Features
