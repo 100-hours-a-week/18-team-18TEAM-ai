@@ -341,7 +341,7 @@ async def _resolve_image_data_url(payload: OCRAnalyzeRequest) -> str:
     raise HTTPException(status_code=400, detail="image_url, image_base64, or image_data_url is required")
 
 
-async def _call_vllm(
+async def _call_vllm( 
     messages: list[dict[str, Any]],
     model: str,
     temperature: float,
