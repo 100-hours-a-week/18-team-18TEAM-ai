@@ -32,13 +32,13 @@ class VLLMClient:
                 # Runpod OpenAI-compatible endpoint
                 base_url = f"{self.base_url}/openai/v1"
                 api_key = os.getenv(self._RUNPOD_KEY_ENV, self.api_key)
-            self.client = AsyncOpenAI(base_url=base_url, api_key=api_key, timeout=DEFAULT_TIMEOUT)
+            self.client = AsyncOpenAI(base_url=base_url, api_key=api_key, timeout=DEFAULT_TIMEOUT, max_retries=0)
 
     async def generate_json(
         self,
         prompt: str = "",
         strict_json: bool = True,
-        max_retries: int = 2,
+        max_retries: int = 1,
         timeout: int = DEFAULT_TIMEOUT,
         messages: Optional[list[Dict[str, Any]]] = None,
         system_prompt: str = DEFAULT_SYSTEM_PROMPT,
