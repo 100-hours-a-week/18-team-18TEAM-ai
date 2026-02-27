@@ -2,6 +2,14 @@
 
 <!-- version list -->
 
+## v0.13.0 (2026-02-27)
+
+### Features
+
+- NOGROUP 오류 발생 시 소비자 그룹 재생성 로직 추가
+  ([`b59fe80`](https://github.com/100-hours-a-week/18-team-18TEAM-ai/commit/b59fe80b033d1be533dade61bf8f7c6dbe86ff64))
+
+
 ## v0.12.0 (2026-02-27)
 
 ### Features
