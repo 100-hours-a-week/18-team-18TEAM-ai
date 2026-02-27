@@ -1,9 +1,7 @@
 from __future__ import annotations
 
-import asyncio
 import time
 import base64
-from collections import deque
 import io
 import json
 import math
@@ -12,10 +10,10 @@ import re
 from typing import Any, Dict, Optional
 
 import httpx
-from fastapi import APIRouter, Form, Header, HTTPException
+from fastapi import APIRouter, Header, HTTPException
 from PIL import Image, ImageOps
 
-from app.schemas import TaskSubmitResponse, TaskStatus, OCRAnalyzeResponse
+from app.schemas import OCRAnalyzeRequest, OCRAnalyzeResponse, TaskSubmitResponse, TaskStatus
 from app.tasks.models import TaskType
 from app.tasks.producer import get_producer
 from app.clients.vllm_client import VLLMClient
@@ -305,6 +303,44 @@ async def _image_data_url_from_url(image_url: str) -> str:
     return f"data:image/png;base64,{b64}"
 
 
+def _image_data_url_from_base64(image_base64: str) -> str:
+    if not image_base64:
+        raise HTTPException(status_code=400, detail="image_base64 is required")
+    try:
+        if image_base64.startswith("data:"):
+            _, encoded = image_base64.split(",", 1)
+        else:
+            encoded = image_base64
+        img_bytes = base64.b64decode(encoded)
+    except Exception as exc:
+        raise HTTPException(status_code=400, detail="invalid image_base64") from exc
+
+    if not img_bytes:
+        raise HTTPException(status_code=400, detail="empty image_base64 content")
+
+    try:
+        img = Image.open(io.BytesIO(img_bytes))
+        img = ImageOps.exif_transpose(img).convert("RGB")
+    except Exception as exc:
+        raise HTTPException(status_code=400, detail="failed to decode image_base64 content") from exc
+
+    img = _resize_to_pixel_range(img, MIN_PIXELS, MAX_PIXELS)
+    buf = io.BytesIO()
+    img.save(buf, format="PNG")
+    b64 = base64.b64encode(buf.getvalue()).decode("utf-8")
+    return f"data:image/png;base64,{b64}"
+
+
+async def _resolve_image_data_url(payload: OCRAnalyzeRequest) -> str:
+    if payload.image_data_url:
+        return payload.image_data_url
+    if payload.image_url:
+        return await _image_data_url_from_url(payload.image_url)
+    if payload.image_base64:
+        return _image_data_url_from_base64(payload.image_base64)
+    raise HTTPException(status_code=400, detail="image_url, image_base64, or image_data_url is required")
+
+
 async def _call_vllm(
     messages: list[dict[str, Any]],
     model: str,
@@ -400,26 +436,13 @@ async def _call_vllm(
         "ttft_is_estimated": False,
     }
 
-def _safe_float(value: str | None) -> float | None:
-    if value is None:
-        return None
-    try:
-        return float(value)
-    except (TypeError, ValueError):
-        return None
-
-
 # ============================================================
 # 비동기 작업 엔드포인트
 # ============================================================
 
 @router.post("/ocr/analyze", response_model=TaskSubmitResponse)
 async def analyze_ocr_async(
-    image_url: str = Form(...),
-    model: str = Form(default=DEFAULT_MODEL),
-    temperature: float = Form(default=0.0),
-    wait_for_ready: bool = Form(default=True),
-    return_raw: bool = Form(default=False),
+    payload: OCRAnalyzeRequest,
     authorization: str | None = Header(default=None),
     x_request_id: str | None = Header(default=None),
 ) -> TaskSubmitResponse:
@@ -427,7 +450,8 @@ async def analyze_ocr_async(
     _ = authorization
     _ = x_request_id
 
-    image_data_url = await _image_data_url_from_url(image_url)
+    image_data_url = await _resolve_image_data_url(payload)
+    model = payload.model or DEFAULT_MODEL
 
     producer = get_producer()
     record = await producer.submit(
@@ -436,9 +460,9 @@ async def analyze_ocr_async(
             "image_data_url": image_data_url,
             "messages": build_messages(image_data_url),
             "model": model,
-            "temperature": temperature,
-            "wait_for_ready": wait_for_ready,
-            "return_raw": return_raw,
+            "temperature": payload.temperature,
+            "wait_for_ready": payload.wait_for_ready,
+            "return_raw": payload.return_raw,
         },
     )
 
@@ -455,50 +479,29 @@ async def analyze_ocr_async(
 
 @router.post("/ocr/analyze/sync", response_model=OCRAnalyzeResponse)
 async def analyze_ocr_sync(
-    image_url: str = Form(...),
-    model: str = Form(default=DEFAULT_MODEL),
-    temperature: float = Form(default=0.0),
-    wait_for_ready: bool = Form(default=True),
-    return_raw: bool = Form(default=False),
+    payload: OCRAnalyzeRequest,
     authorization: str | None = Header(default=None),
     x_request_id: str | None = Header(default=None),
-    x_client_upload_start_ms: str | None = Header(default=None),
-    x_client_request_start_ms: str | None = Header(default=None),
 ) -> OCRAnalyzeResponse:
     """동기 OCR: vLLM에 바로 요청하고 결과를 반환한다."""
     _ = authorization
     _ = x_request_id
 
-    req_start = time.perf_counter()
-    now_epoch_ms = time.time() * 1000
-    client_upload_start_ms = _safe_float(x_client_upload_start_ms)
-    client_request_start_ms = _safe_float(x_client_request_start_ms)
-
-    image_data_url = await _image_data_url_from_url(image_url)
+    image_data_url = await _resolve_image_data_url(payload)
     messages = build_messages(image_data_url)
+    model = payload.model or DEFAULT_MODEL
 
-    # infer_start = time.perf_counter()
     raw, perf = await _call_vllm(
         messages=messages,
         model=model,
-        temperature=temperature,
-        wait_for_ready=wait_for_ready,
+        temperature=payload.temperature,
+        wait_for_ready=payload.wait_for_ready,
     )
     if raw is None:
         raise HTTPException(status_code=500, detail="vLLM returned no response")
-    # infer_ms = (time.perf_counter() - infer_start) * 1000
-    # cold_start = await _consume_cold_start(infer_ms)
 
     post = postprocess_result(raw)
-    result = raw if return_raw or post is None else post
-
-    server_processing_ms = (time.perf_counter() - req_start) * 1000
-    # 업로드 시작 시각 헤더가 있으면 더 사용자 체감에 가까운 값으로 계산
-    user_perceived_ms = (
-        now_epoch_ms - client_upload_start_ms
-        if client_upload_start_ms is not None
-        else server_processing_ms
-    )
+    result = raw if payload.return_raw or post is None else post
 
     return OCRAnalyzeResponse(
         message="ok",
