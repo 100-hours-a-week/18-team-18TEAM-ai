@@ -6,11 +6,13 @@ UBUNTU_HOME="/home/${UBUNTU_USER}"
 UBUNTU_UID="$(id -u "${UBUNTU_USER}")"
 USER_RUNTIME_DIR="/run/user/${UBUNTU_UID}"
 
-CONTAINER_NAME="${CONTAINER_NAME:-bizkit-ai}"
-UNIT_NAME="container-${CONTAINER_NAME}.service"
+API_CONTAINER_NAME="${API_CONTAINER_NAME:-bizkit-ai}"
+WORKER_CONTAINER_NAME="${WORKER_CONTAINER_NAME:-bizkit-ai-worker}"
+API_UNIT_NAME="container-${API_CONTAINER_NAME}.service"
+WORKER_UNIT_NAME="container-${WORKER_CONTAINER_NAME}.service"
 LEGACY_SERVICES="${LEGACY_SERVICES:-bizkit-ai.service,bizkit-ai-worker.service}"
 
-echo "[stop-ai-container] stopping ${CONTAINER_NAME}"
+echo "[stop-ai-container] stopping api=${API_CONTAINER_NAME}, worker=${WORKER_CONTAINER_NAME}"
 for service in ${LEGACY_SERVICES//,/ }; do
   systemctl stop "${service}" || true
 done
@@ -35,11 +37,19 @@ as_ubuntu() {
     "$@"
 }
 
-as_ubuntu systemctl --user disable --now "${UNIT_NAME}" >/dev/null 2>&1 || true
+as_ubuntu systemctl --user disable --now "${API_UNIT_NAME}" >/dev/null 2>&1 || true
+as_ubuntu systemctl --user disable --now "${WORKER_UNIT_NAME}" >/dev/null 2>&1 || true
 
-if as_ubuntu podman ps --format "{{.Names}}" 2>/dev/null | grep -Fxq "${CONTAINER_NAME}"; then
-  as_ubuntu podman rm -f "${CONTAINER_NAME}" || true
-  echo "[stop-ai-container] container removed: ${CONTAINER_NAME}"
+if as_ubuntu podman ps --format "{{.Names}}" 2>/dev/null | grep -Fxq "${API_CONTAINER_NAME}"; then
+  as_ubuntu podman rm -f "${API_CONTAINER_NAME}" || true
+  echo "[stop-ai-container] container removed: ${API_CONTAINER_NAME}"
 else
-  echo "[stop-ai-container] container not found: ${CONTAINER_NAME}"
+  echo "[stop-ai-container] container not found: ${API_CONTAINER_NAME}"
+fi
+
+if as_ubuntu podman ps --format "{{.Names}}" 2>/dev/null | grep -Fxq "${WORKER_CONTAINER_NAME}"; then
+  as_ubuntu podman rm -f "${WORKER_CONTAINER_NAME}" || true
+  echo "[stop-ai-container] container removed: ${WORKER_CONTAINER_NAME}"
+else
+  echo "[stop-ai-container] container not found: ${WORKER_CONTAINER_NAME}"
 fi
