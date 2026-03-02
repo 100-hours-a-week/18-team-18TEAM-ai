@@ -10,13 +10,14 @@ UBUNTU_HOME="/home/${UBUNTU_USER}"
 UBUNTU_UID="$(id -u "${UBUNTU_USER}")"
 USER_RUNTIME_DIR="/run/user/${UBUNTU_UID}"
 
-CONTAINER_NAME="${CONTAINER_NAME:-bizkit-ai}"
-UNIT_NAME="container-${CONTAINER_NAME}.service"
+API_CONTAINER_NAME="${API_CONTAINER_NAME:-bizkit-ai}"
+WORKER_CONTAINER_NAME="${WORKER_CONTAINER_NAME:-bizkit-ai-worker}"
+API_UNIT_NAME="container-${API_CONTAINER_NAME}.service"
+WORKER_UNIT_NAME="container-${WORKER_CONTAINER_NAME}.service"
 HEALTH_CHECK_URL="${HEALTH_CHECK_URL:-http://127.0.0.1:8000/ai/health}"
-HOST_PORT="${HOST_PORT:-8000}"
-CONTAINER_PORT="${CONTAINER_PORT:-8000}"
 ENV_FILE="${ENV_FILE:-/home/ubuntu/.env-ai}"
 LEGACY_SERVICES="${LEGACY_SERVICES:-bizkit-ai.service,bizkit-ai-worker.service}"
+PODMAN_NETWORK="${PODMAN_NETWORK:-host}"
 
 : "${RELEASE_ID:?RELEASE_ID is required}"
 : "${APP_STAGE:?APP_STAGE is required}"
@@ -48,6 +49,51 @@ as_ubuntu() {
     "$@"
 }
 
+create_container_unit() {
+  local container_name="$1"
+  local unit_name="$2"
+  local unit_image="$3"
+  shift 3
+  local command_args=("$@")
+
+  as_ubuntu podman rm -f "${container_name}" >/dev/null 2>&1 || true
+  as_ubuntu systemctl --user disable --now "${unit_name}" >/dev/null 2>&1 || true
+
+  as_ubuntu podman create \
+    --name "${container_name}" \
+    --replace \
+    --env-file "${ENV_FILE}" \
+    --network "${PODMAN_NETWORK}" \
+    "${unit_image}" \
+    "${command_args[@]}"
+
+  as_ubuntu bash -lc "mkdir -p '${UBUNTU_HOME}/.config/systemd/user' && cd '${UBUNTU_HOME}/.config/systemd/user' && podman generate systemd --new --name '${container_name}' --files --restart-policy always"
+  as_ubuntu systemctl --user daemon-reload
+  as_ubuntu systemctl --user enable --now "${unit_name}"
+}
+
+stop_container_units() {
+  as_ubuntu systemctl --user disable --now "${API_UNIT_NAME}" >/dev/null 2>&1 || true
+  as_ubuntu systemctl --user disable --now "${WORKER_UNIT_NAME}" >/dev/null 2>&1 || true
+  as_ubuntu podman rm -f "${API_CONTAINER_NAME}" >/dev/null 2>&1 || true
+  as_ubuntu podman rm -f "${WORKER_CONTAINER_NAME}" >/dev/null 2>&1 || true
+}
+
+stop_legacy_services() {
+  for service in ${LEGACY_SERVICES//,/ }; do
+    systemctl stop "${service}" || true
+  done
+}
+
+show_debug_info() {
+  local container_name="$1"
+  as_ubuntu podman ps -a || true
+  if as_ubuntu podman ps --format "{{.Names}}" | grep -Fxq "${container_name}"; then
+    as_ubuntu podman inspect "${container_name}" --format 'container ID={{.ID}} State={{.State.Status}} ExitCode={{.State.ExitCode}} OOMKilled={{.State.OOMKilled}} StartedAt={{.State.StartedAt}} FinishedAt={{.State.FinishedAt}} Error={{.State.Error}}' || true
+    as_ubuntu podman logs --tail 200 "${container_name}" || true
+  fi
+}
+
 install -d -m 0755 -o "${UBUNTU_USER}" -g "${UBUNTU_USER}" "${STATE_DIR}"
 
 PREV_IMAGE_URI=""
@@ -65,29 +111,20 @@ AWS_REGION="$(echo "${REGISTRY}" | sed -E 's#^.*\.ecr\.([a-z0-9-]+)\.amazonaws\.
 echo "[deploy-ai-container] release=${RELEASE_ID} stage=${APP_STAGE}"
 echo "[deploy-ai-container] image=${IMAGE_URI}"
 echo "[deploy-ai-container] previous_image=${PREV_IMAGE_URI:-none}"
-echo "[deploy-ai-container] container_name=${CONTAINER_NAME}"
+echo "[deploy-ai-container] api_container=${API_CONTAINER_NAME} worker_container=${WORKER_CONTAINER_NAME}"
 echo "[deploy-ai-container] health_check_url=${HEALTH_CHECK_URL}"
 
-echo "[deploy-ai-container] stopping legacy services ${LEGACY_SERVICES} (if exist)"
-for service in ${LEGACY_SERVICES//,/ }; do
-  systemctl stop "${service}" || true
-done
+stop_legacy_services
 
 as_ubuntu bash -lc "aws ecr get-login-password --region '${AWS_REGION}' | podman login --username AWS --password-stdin '${REGISTRY}'"
 as_ubuntu podman pull "${IMAGE_URI}"
-as_ubuntu systemctl --user disable --now "${UNIT_NAME}" >/dev/null 2>&1 || true
-as_ubuntu podman rm -f "${CONTAINER_NAME}" >/dev/null 2>&1 || true
+stop_container_units
 
-as_ubuntu podman create \
-  --name "${CONTAINER_NAME}" \
-  --replace \
-  --env-file "${ENV_FILE}" \
-  -p "${HOST_PORT}:${CONTAINER_PORT}" \
-  "${IMAGE_URI}"
+echo "[deploy-ai-container] start API container"
+create_container_unit "${API_CONTAINER_NAME}" "${API_UNIT_NAME}" "${IMAGE_URI}"
 
-as_ubuntu bash -lc "mkdir -p '${UBUNTU_HOME}/.config/systemd/user' && cd '${UBUNTU_HOME}/.config/systemd/user' && podman generate systemd --new --name '${CONTAINER_NAME}' --files --restart-policy always"
-as_ubuntu systemctl --user daemon-reload
-as_ubuntu systemctl --user enable --now "${UNIT_NAME}"
+echo "[deploy-ai-container] start worker container"
+create_container_unit "${WORKER_CONTAINER_NAME}" "${WORKER_UNIT_NAME}" "${IMAGE_URI}" "python" "run_worker.py"
 
 ok=0
 for i in $(seq 1 30); do
@@ -106,26 +143,15 @@ if [[ "${ok}" -eq 1 ]]; then
 fi
 
 echo "[deploy-ai-container] FAILED healthcheck. rollback start." >&2
-as_ubuntu systemctl --user status "${UNIT_NAME}" --no-pager || true
-as_ubuntu podman ps --all || true
-as_ubuntu podman inspect "${CONTAINER_NAME}" --format 'pre-rollback ID={{.ID}} State={{.State.Status}} ExitCode={{.State.ExitCode}} OOMKilled={{.State.OOMKilled}} StartedAt={{.State.StartedAt}} FinishedAt={{.State.FinishedAt}} Error={{.State.Error}}' || true
-as_ubuntu podman logs --tail 200 "${CONTAINER_NAME}" || true
-
-as_ubuntu systemctl --user disable --now "${UNIT_NAME}" >/dev/null 2>&1 || true
-as_ubuntu podman rm -f "${CONTAINER_NAME}" >/dev/null 2>&1 || true
+show_debug_info "${API_CONTAINER_NAME}"
+show_debug_info "${WORKER_CONTAINER_NAME}"
+stop_container_units
 
 if [[ -n "${PREV_IMAGE_URI}" ]]; then
   echo "[deploy-ai-container] rollback image=${PREV_IMAGE_URI}" >&2
   as_ubuntu podman pull "${PREV_IMAGE_URI}"
-  as_ubuntu podman create \
-    --name "${CONTAINER_NAME}" \
-    --replace \
-    --env-file "${ENV_FILE}" \
-    -p "${HOST_PORT}:${CONTAINER_PORT}" \
-    "${PREV_IMAGE_URI}"
-  as_ubuntu bash -lc "mkdir -p '${UBUNTU_HOME}/.config/systemd/user' && cd '${UBUNTU_HOME}/.config/systemd/user' && podman generate systemd --new --name '${CONTAINER_NAME}' --files --restart-policy always"
-  as_ubuntu systemctl --user daemon-reload
-  as_ubuntu systemctl --user enable --now "${UNIT_NAME}"
+  create_container_unit "${API_CONTAINER_NAME}" "${API_UNIT_NAME}" "${PREV_IMAGE_URI}"
+  create_container_unit "${WORKER_CONTAINER_NAME}" "${WORKER_UNIT_NAME}" "${PREV_IMAGE_URI}" "python" "run_worker.py"
 
   for i in $(seq 1 20); do
     if curl -fsSL --max-time 2 "${HEALTH_CHECK_URL}" >/dev/null; then
@@ -134,9 +160,9 @@ if [[ -n "${PREV_IMAGE_URI}" ]]; then
     fi
     sleep 1
   done
-  as_ubuntu podman inspect "${CONTAINER_NAME}" --format 'rollback ID={{.ID}} State={{.State.Status}} ExitCode={{.State.ExitCode}} OOMKilled={{.State.OOMKilled}} Error={{.State.Error}}' || true
-  as_ubuntu podman logs --tail 200 "${CONTAINER_NAME}" || true
 fi
 
+show_debug_info "${API_CONTAINER_NAME}"
+show_debug_info "${WORKER_CONTAINER_NAME}"
 echo "[deploy-ai-container] ROLLBACK FAILED" >&2
 exit 1

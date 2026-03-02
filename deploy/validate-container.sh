@@ -6,8 +6,10 @@ UBUNTU_HOME="/home/${UBUNTU_USER}"
 UBUNTU_UID="$(id -u "${UBUNTU_USER}")"
 USER_RUNTIME_DIR="/run/user/${UBUNTU_UID}"
 
-CONTAINER_NAME="${CONTAINER_NAME:-bizkit-ai}"
-UNIT_NAME="container-${CONTAINER_NAME}.service"
+API_CONTAINER_NAME="${API_CONTAINER_NAME:-bizkit-ai}"
+WORKER_CONTAINER_NAME="${WORKER_CONTAINER_NAME:-bizkit-ai-worker}"
+API_UNIT_NAME="container-${API_CONTAINER_NAME}.service"
+WORKER_UNIT_NAME="container-${WORKER_CONTAINER_NAME}.service"
 URL="${URL:-http://127.0.0.1:8000/ai/health}"
 ENV_FILE="${UBUNTU_HOME}/deploy/env.sh"
 LEGACY_SERVICES="${LEGACY_SERVICES:-bizkit-ai.service,bizkit-ai-worker.service}"
@@ -50,16 +52,28 @@ as_ubuntu() {
     "$@"
 }
 
-echo "[validate-ai-container] checking container=${CONTAINER_NAME}"
+echo "[validate-ai-container] checking api container=${API_CONTAINER_NAME}, worker=${WORKER_CONTAINER_NAME}"
 for i in $(seq 1 "${TRIES}"); do
-  if ! as_ubuntu systemctl --user is-active --quiet "${UNIT_NAME}"; then
-    echo "[validate-ai-container] unit not active: ${UNIT_NAME} (try=${i})"
+  if ! as_ubuntu systemctl --user is-active --quiet "${API_UNIT_NAME}"; then
+    echo "[validate-ai-container] api unit not active: ${API_UNIT_NAME} (try=${i})"
     sleep "${SLEEP_SEC}"
     continue
   fi
 
-  if ! as_ubuntu podman ps --format "{{.Names}}" | grep -Fxq "${CONTAINER_NAME}"; then
-    echo "[validate-ai-container] container not running (try=${i})"
+  if ! as_ubuntu systemctl --user is-active --quiet "${WORKER_UNIT_NAME}"; then
+    echo "[validate-ai-container] worker unit not active: ${WORKER_UNIT_NAME} (try=${i})"
+    sleep "${SLEEP_SEC}"
+    continue
+  fi
+
+  if ! as_ubuntu podman ps --format "{{.Names}}" | grep -Fxq "${API_CONTAINER_NAME}"; then
+    echo "[validate-ai-container] api container not running (try=${i})"
+    sleep "${SLEEP_SEC}"
+    continue
+  fi
+
+  if ! as_ubuntu podman ps --format "{{.Names}}" | grep -Fxq "${WORKER_CONTAINER_NAME}"; then
+    echo "[validate-ai-container] worker container not running (try=${i})"
     sleep "${SLEEP_SEC}"
     continue
   fi
@@ -74,7 +88,8 @@ for i in $(seq 1 "${TRIES}"); do
 done
 
 echo "[validate-ai-container] FAILED"
-as_ubuntu systemctl --user status "${UNIT_NAME}" --no-pager || true
+as_ubuntu systemctl --user status "${API_UNIT_NAME}" "${WORKER_UNIT_NAME}" --no-pager || true
 as_ubuntu podman ps -a || true
-as_ubuntu podman logs --tail 200 "${CONTAINER_NAME}" || true
+as_ubuntu podman logs --tail 200 "${API_CONTAINER_NAME}" || true
+as_ubuntu podman logs --tail 200 "${WORKER_CONTAINER_NAME}" || true
 exit 1

@@ -17,12 +17,10 @@ fi
 export RELEASE_ID
 export APP_STAGE
 export IMAGE_URI
+export API_CONTAINER_NAME="${API_CONTAINER_NAME:-bizkit-ai}"
+export WORKER_CONTAINER_NAME="${WORKER_CONTAINER_NAME:-bizkit-ai-worker}"
 export HEALTH_CHECK_URL="${HEALTH_CHECK_URL:-${HEALTH_URL:-http://127.0.0.1:8000/ai/health}}"
 export ENV_FILE="${ENV_FILE:-/home/ubuntu/.env-ai}"
-export CONTAINER_NAME="${CONTAINER_NAME:-bizkit-ai}"
-export HOST_PORT="${HOST_PORT:-8000}"
-export CONTAINER_PORT="${CONTAINER_PORT:-8000}"
-export LEGACY_SERVICES="${LEGACY_SERVICES:-bizkit-ai.service,bizkit-ai-worker.service}"
 
 chmod +x "${HOOK_DIR}/deploy-ai-container.sh"
 exec "${HOOK_DIR}/deploy-ai-container.sh"
