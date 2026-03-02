@@ -16,7 +16,7 @@ concurrency:
 jobs:
   deploy:
     if: github.actor != 'github-actions[bot]'
-    runs-on: ubuntu-24.04
+    runs-on: ubuntu-24.04-arm
     timeout-minutes: 25
 
     env:
@@ -80,85 +80,80 @@ jobs:
           aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
           aws-region: ${{ secrets.AWS_REGION }}
 
-      - name: Build AI Deploy Artifact
+      - name: Install Buildah
         shell: bash
         run: |
           set -euo pipefail
-          VERSION=${{ steps.ver.outputs.value }}
+          sudo apt-get update
+          sudo apt-get install -y buildah
 
-          OUT_ARCHIVE="bizkit-ai-${VERSION}.tar.gz"
-
-          tar \
-            --exclude='.git' \
-            --exclude='__pycache__' \
-            --exclude='.github' \
-            --exclude='.venv' \
-            --exclude='venv' \
-            --exclude='.pytest_cache' \
-            -czf "$OUT_ARCHIVE" \
-            app \
-            run_worker.py \
-            requirements.txt \
-            VERSION \
-            README.md || {
-              echo "Failed to create archive" >&2
-              exit 1
-            }
-
-          echo "OUT_ARCHIVE=$OUT_ARCHIVE" >> "$GITHUB_ENV"
-          ls -al "$OUT_ARCHIVE"
-
-      - name: Upload Build Artifact to S3
+      - name: Login to ECR
         shell: bash
         run: |
           set -euo pipefail
-          VERSION=${{ steps.ver.outputs.value }}
+          AWS_REGION="${{ secrets.AWS_REGION }}"
+          AWS_ACCOUNT_ID="$(aws sts get-caller-identity --query Account --output text)"
+          ECR_REPOSITORY="${{ secrets.ECR_REPOSITORY_AI_PROD }}"
+          if [[ -z "${ECR_REPOSITORY}" ]]; then
+            ECR_REPOSITORY="bizkit-ai-prod"
+          fi
+          ECR_REGISTRY="${AWS_ACCOUNT_ID}.dkr.ecr.${AWS_REGION}.amazonaws.com"
+
+          aws ecr get-login-password --region "${AWS_REGION}" | \
+            buildah login --username AWS --password-stdin "${ECR_REGISTRY}"
+          if ! aws ecr describe-repositories --repository-names "${ECR_REPOSITORY}" --region "${AWS_REGION}" >/dev/null 2>&1; then
+            aws ecr create-repository --repository-name "${ECR_REPOSITORY}" --region "${AWS_REGION}" >/dev/null
+          fi
+
+          echo "ECR_REPOSITORY=${ECR_REPOSITORY}" >> "$GITHUB_ENV"
+          echo "ECR_REGISTRY=${ECR_REGISTRY}" >> "$GITHUB_ENV"
+
+      - name: Build and Push AI Container Image
+        shell: bash
+        run: |
+          set -euo pipefail
+          VERSION="${{ steps.ver.outputs.value }}"
+          IMAGE_TAG="prod-${VERSION}-${GITHUB_SHA::7}"
+          IMAGE_URI="${ECR_REGISTRY}/${ECR_REPOSITORY}:${IMAGE_TAG}"
+
+          buildah bud --layers --arch arm64 -f Containerfile -t "${IMAGE_URI}" .
+          buildah push "${IMAGE_URI}"
+
+          echo "IMAGE_URI=${IMAGE_URI}" >> "$GITHUB_ENV"
+          echo "IMAGE_TAG=${IMAGE_TAG}" >> "$GITHUB_ENV"
+
+      - name: Build CodeDeploy bundle (AI container)
+        shell: bash
+        run: |
+          set -euo pipefail
+          VERSION="${{ steps.ver.outputs.value }}"
           BUCKET="${{ secrets.S3_BUCKET }}"
-          S3_PREFIX="${{ secrets.S3_PREFIX }}"
 
-          RELEASE_KEY="${S3_PREFIX}/${APP_STAGE}/releases/ai/${VERSION}/bizkit-ai-${VERSION}.tar.gz"
+          rm -rf bundle
+          mkdir -p bundle/deploy
 
-          aws s3 cp "$OUT_ARCHIVE" "s3://$BUCKET/${RELEASE_KEY}" --cache-control no-cache
+          cp deploy/appspec-container.yml bundle/appspec.yml
+          cp deploy/start-container.sh bundle/deploy/start-container.sh
+          cp deploy/stop-container.sh bundle/deploy/stop-container.sh
+          cp deploy/validate-container.sh bundle/deploy/validate-container.sh
+          cp deploy/deploy-ai-container.sh bundle/deploy/deploy-ai-container.sh
 
-          echo "BUCKET=$BUCKET" >> "$GITHUB_ENV"
-          echo "RELEASE_KEY=$RELEASE_KEY" >> "$GITHUB_ENV"
+          chmod +x bundle/deploy/start-container.sh bundle/deploy/stop-container.sh bundle/deploy/validate-container.sh bundle/deploy/deploy-ai-container.sh
 
-      - name: Build CodeDeploy bundle (AI)
-        shell: bash
-        run: |
-          set -euo pipefail
-          VERSION=${{ steps.ver.outputs.value }}
-
-          rm -rf bundle && mkdir -p bundle/codedeploy/ai/hooks
-
-          cp codedeploy/ai/appspec.yml bundle/appspec.yml
-          cp deploy-ai.sh bundle/deploy-ai.sh
-          cp -r codedeploy/ai/hooks/* bundle/codedeploy/ai/hooks/
-
-          chmod +x bundle/deploy-ai.sh || true
-          chmod +x bundle/codedeploy/ai/hooks/* || true
-
-          ARCHIVE_URL="$(aws s3 presign "s3://$BUCKET/$RELEASE_KEY" --expires-in 3600)"
-          ESCAPED_URL=$(printf "%s" "$ARCHIVE_URL" | sed "s/'/'\\\\''/g")
-
-          cat > bundle/codedeploy/ai/env.sh <<EOF
+          cat > bundle/deploy/env.sh <<EOF_ENV
           RELEASE_ID='${VERSION}'
-          ARCHIVE_URL='${ESCAPED_URL}'
-          HEALTH_URL='${HEALTH_URL}'
-          EOF
+          APP_STAGE='${APP_STAGE}'
+          IMAGE_URI='${IMAGE_URI}'
+          HEALTH_CHECK_URL='${HEALTH_URL}'
+          EOF_ENV
 
           (cd bundle && zip -r ../bundle.zip .)
           unzip -l bundle.zip
 
-      - name: Upload bundle.zip to S3
-        shell: bash
-        run: |
-          set -euo pipefail
-          VERSION=${{ steps.ver.outputs.value }}
-          S3_PREFIX="${{ secrets.S3_PREFIX }}"
-          BUNDLE_KEY="${S3_PREFIX}/${APP_STAGE}/codedeploy/ai/${VERSION}/bundle-${{ github.run_id }}.zip"
-
+          BUNDLE_KEY="${{ secrets.S3_PREFIX }}/${APP_STAGE}/codedeploy/ai/${VERSION}/bundle-${{ github.run_id }}.zip"
           aws s3 cp bundle.zip "s3://$BUCKET/$BUNDLE_KEY"
+
+          echo "BUCKET=$BUCKET" >> "$GITHUB_ENV"
           echo "BUNDLE_KEY=$BUNDLE_KEY" >> "$GITHUB_ENV"
 
       - name: Create CodeDeploy deployment & wait
@@ -197,3 +192,20 @@ jobs:
           JSON_MESSAGE=$(printf '%s\n' "$MESSAGE" | python3 -c 'import json,sys; print(json.dumps({"content": sys.stdin.read()}))')
           curl -X POST -H "Content-Type: application/json" -d "$JSON_MESSAGE" "$DISCORD_WEBHOOK_URL"
 
+      - name: Notify Discord on success
+        if: success()
+        env:
+          DISCORD_WEBHOOK_URL: ${{ secrets.DISCORD_WEBHOOK_URL }}
+        run: |
+          MESSAGE="✅ AI PROD CD 성공 ✅
+          Repo: \`${{ github.repository }}\`
+          Branch: \`${{ github.ref_name }}\`
+          Workflow: \`${{ github.workflow }}\`
+          Job: \`${{ github.job }}\`
+          Actor: \`${{ github.actor }}\`
+          Stage: \`${APP_STAGE}\`
+          Version: \`${{ steps.ver.outputs.value }}\`
+          링크: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}"
+
+          JSON_MESSAGE=$(printf '%s\n' "$MESSAGE" | python3 -c 'import json,sys; print(json.dumps({"content": sys.stdin.read()}))')
+          curl -X POST -H "Content-Type: application/json" -d "$JSON_MESSAGE" "$DISCORD_WEBHOOK_URL"

@@ -1,0 +1,30 @@
+version: 0.0
+os: linux
+
+files:
+  - source: deploy
+    destination: /home/ubuntu/deploy
+    overwrite: true
+
+permissions:
+  - object: /home/ubuntu/deploy
+    pattern: "**"
+    owner: ubuntu
+    group: ubuntu
+    mode: 755
+
+hooks:
+  ApplicationStop:
+    - location: deploy/stop-container.sh
+      timeout: 120
+      runas: root
+
+  ApplicationStart:
+    - location: deploy/start-container.sh
+      timeout: 300
+      runas: root
+
+  ValidateService:
+    - location: deploy/validate-container.sh
+      timeout: 120
+      runas: root
