@@ -15,6 +15,8 @@ WORKER_CONTAINER_NAME="${WORKER_CONTAINER_NAME:-bizkit-ai-worker}"
 API_UNIT_NAME="container-${API_CONTAINER_NAME}.service"
 WORKER_UNIT_NAME="container-${WORKER_CONTAINER_NAME}.service"
 HEALTH_CHECK_URL="${HEALTH_CHECK_URL:-http://127.0.0.1:8000/ai/health}"
+HEALTH_CHECK_RETRIES="${HEALTH_CHECK_RETRIES:-120}"
+HEALTH_CHECK_SLEEP="${HEALTH_CHECK_SLEEP:-2}"
 ENV_FILE="${ENV_FILE:-/home/ubuntu/.env-ai}"
 LEGACY_SERVICES="${LEGACY_SERVICES:-bizkit-ai.service,bizkit-ai-worker.service}"
 PODMAN_NETWORK="${PODMAN_NETWORK:-host}"
@@ -30,9 +32,34 @@ for cmd in podman aws curl runuser systemctl; do
   fi
 done
 
+if [[ ! -x /usr/bin/loginctl ]]; then
+  echo "[deploy-ai-container] missing command: loginctl" >&2
+  exit 2
+fi
+
+ensure_user_runtime_dir() {
+  if [[ ! -d /run/user ]]; then
+    mkdir -p /run/user
+  fi
+  chmod 755 /run/user || true
+
+  if [[ ! -d "${USER_RUNTIME_DIR}" ]]; then
+    echo "[deploy-ai-container] user runtime dir not found: ${USER_RUNTIME_DIR}"
+    echo "[deploy-ai-container] enabling linger and creating runtime dir for ${UBUNTU_USER}"
+    loginctl enable-linger "${UBUNTU_USER}" || true
+    mkdir -p "${USER_RUNTIME_DIR}"
+  fi
+
+  chmod 700 "${USER_RUNTIME_DIR}" || true
+  chown "${UBUNTU_UID}:${UBUNTU_UID}" "${USER_RUNTIME_DIR}" || true
+  mkdir -p "${USER_RUNTIME_DIR}/libpod/tmp"
+  chmod 700 "${USER_RUNTIME_DIR}/libpod/tmp" || true
+}
+
+ensure_user_runtime_dir
+
 if [[ ! -d "${USER_RUNTIME_DIR}" ]]; then
-  echo "[deploy-ai-container] user runtime dir not found: ${USER_RUNTIME_DIR}" >&2
-  echo "[deploy-ai-container] run: loginctl enable-linger ${UBUNTU_USER}" >&2
+  echo "[deploy-ai-container] user runtime dir still missing: ${USER_RUNTIME_DIR}" >&2
   exit 3
 fi
 
@@ -94,6 +121,33 @@ show_debug_info() {
   fi
 }
 
+check_health() {
+  local max="${1}"
+  local current=1
+  while [[ "${current}" -le "${max}" ]]; do
+    local code
+    code="$(curl -sS -o /tmp/healthcheck_body.txt -w "%{http_code}" --max-time 3 "${HEALTH_CHECK_URL}" || true)"
+    local status=$?
+    if [[ "${status}" -eq 0 ]] && [[ "${code}" =~ ^[23][0-9]{2}$ ]]; then
+      echo "[deploy-ai-container] healthcheck ok (${code}) at attempt=${current}" 
+      rm -f /tmp/healthcheck_body.txt
+      return 0
+    fi
+    if [[ -f /tmp/healthcheck_body.txt ]]; then
+      local body
+      body="$(cat /tmp/healthcheck_body.txt | tr '\n' ' ' | tr -s ' ')"
+      rm -f /tmp/healthcheck_body.txt
+    else
+      body=""
+    fi
+    echo "[deploy-ai-container] healthcheck fail attempt=${current}/${max} code=${code} status=${status} body=${body}" >&2
+    current=$((current + 1))
+    sleep "${HEALTH_CHECK_SLEEP}"
+  done
+  rm -f /tmp/healthcheck_body.txt
+  return 1
+}
+
 install -d -m 0755 -o "${UBUNTU_USER}" -g "${UBUNTU_USER}" "${STATE_DIR}"
 
 PREV_IMAGE_URI=""
@@ -127,13 +181,9 @@ echo "[deploy-ai-container] start worker container"
 create_container_unit "${WORKER_CONTAINER_NAME}" "${WORKER_UNIT_NAME}" "${IMAGE_URI}" "python" "run_worker.py"
 
 ok=0
-for i in $(seq 1 30); do
-  if curl -fsSL --max-time 2 "${HEALTH_CHECK_URL}" >/dev/null; then
-    ok=1
-    break
-  fi
-  sleep 1
-done
+if check_health "${HEALTH_CHECK_RETRIES}"; then
+  ok=1
+fi
 
 if [[ "${ok}" -eq 1 ]]; then
   echo "${IMAGE_URI}" > "${CURRENT_IMAGE_FILE}"
@@ -153,12 +203,11 @@ if [[ -n "${PREV_IMAGE_URI}" ]]; then
   create_container_unit "${API_CONTAINER_NAME}" "${API_UNIT_NAME}" "${PREV_IMAGE_URI}"
   create_container_unit "${WORKER_CONTAINER_NAME}" "${WORKER_UNIT_NAME}" "${PREV_IMAGE_URI}" "python" "run_worker.py"
 
-  for i in $(seq 1 20); do
-    if curl -fsSL --max-time 2 "${HEALTH_CHECK_URL}" >/dev/null; then
+  for i in $(seq 1 60); do
+    if check_health 1; then
       echo "[deploy-ai-container] ROLLBACK OK" >&2
       exit 1
     fi
-    sleep 1
   done
 fi
 

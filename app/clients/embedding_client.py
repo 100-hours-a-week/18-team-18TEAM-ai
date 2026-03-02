@@ -18,7 +18,7 @@ class EmbeddingClient:
         self.base_url = os.getenv(
             "EMBEDDING_SERVICE_URL", "http://localhost:8100"
         )
-        self.timeout = 30.0
+        self.timeout = float(os.getenv("EMBEDDING_SERVICE_TIMEOUT", "3.0"))
 
     async def health(self) -> Dict[str, Any]:
         """임베딩 서비스 헬스체크."""
