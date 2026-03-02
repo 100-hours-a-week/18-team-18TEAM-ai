@@ -178,3 +178,25 @@ class JobAnalyzeResponse(BaseModel):
     # 직무 분석 응답 스키마.
     message: str
     data: Dict[str, Any]
+
+
+# ============================================================
+# OCR 스키마 (추가)
+# ============================================================
+
+
+class OCRAnalyzeRequest(BaseModel):
+    # OCR 분석 요청 스키마.
+    image_url: Optional[str] = None
+    image_base64: Optional[str] = None
+    image_data_url: Optional[str] = None
+    model: Optional[str] = None
+    temperature: float = 0.0
+    wait_for_ready: bool = True
+    return_raw: bool = False
+
+
+class OCRAnalyzeResponse(BaseModel):
+    # OCR 분석 응답 스키마.
+    message: str
+    data: Dict[str, Any]

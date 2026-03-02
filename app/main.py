@@ -1,23 +1,41 @@
 from __future__ import annotations
 
+import logging
 import os
+from contextlib import asynccontextmanager
+
+from dotenv import load_dotenv
+
+# 모듈 임포트 전에 .env 로드 (각 모듈의 os.getenv가 올바른 값을 읽도록)
+load_dotenv()
 
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
-from dotenv import load_dotenv
+
+logging.basicConfig(
+    level=logging.INFO,
+    format="%(asctime)s [%(levelname)s] %(name)s: %(message)s",
+)
 
 
 from app.routers import hex as hex_router
 from app.routers import job as job_router
+from app.routers import ocr as ocr_router # 추가된 ocr
 
 from app.routers import tasks as tasks_router
 
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    # 시작: 임베딩 서비스 초기화 (Milvus 컬렉션 생성 + 시드 데이터 로드)
+    from app.embedding import init_embedding
+    await init_embedding()
+    yield
 
 
 def create_app() -> FastAPI:
     # FastAPI 앱과 공통 미들웨어/라우터를 구성한다.
     load_dotenv()
-    app = FastAPI(title="18-team-18TEAM-ai", version="0.1.0")
+    app = FastAPI(title="18-team-18TEAM-ai", version="0.1.0", lifespan=lifespan)
 
     app.add_middleware(
         CORSMiddleware,
@@ -30,6 +48,7 @@ def create_app() -> FastAPI:
 
     app.include_router(hex_router.router, prefix="/ai")
     app.include_router(job_router.router, prefix="/ai")
+    app.include_router(ocr_router.router, prefix="/ai")  # 추가된 ocr
 
     app.include_router(tasks_router.router, prefix="/ai")
   

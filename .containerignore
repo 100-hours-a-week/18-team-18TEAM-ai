@@ -1,0 +1,13 @@
+.git
+.github
+__pycache__
+*.pyc
+*.pyo
+*.pyd
+.pytest_cache
+.venv
+.env
+README.md
+CHANGELOG.md
+codedeploy
+deploy-ai.sh

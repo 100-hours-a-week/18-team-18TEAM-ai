@@ -7,15 +7,22 @@ from typing import Any, Dict, Optional
 
 from openai import AsyncOpenAI, APIConnectionError, APITimeoutError, RateLimitError, APIStatusError
 
-DEFAULT_TIMEOUT = 60
+DEFAULT_TIMEOUT = 100
 
 
 class VLLMClient:
+    DEFAULT_SYSTEM_PROMPT = "You are a helpful analyst."
+
+    _BASE_URL_ENV   = "VLLM_BASE_URL"
+    _MODEL_ENV      = "VLLM_MODEL"
+    _API_KEY_ENV    = "VLLM_API_KEY"
+    _RUNPOD_KEY_ENV = "RUNPOD_API_KEY"
+
     def __init__(self) -> None:
         # vLLM 엔드포인트 및 인증 정보를 환경변수에서 로드한다.
-        self.base_url = os.getenv("VLLM_BASE_URL", "").rstrip("/")
-        self.model = os.getenv("VLLM_MODEL", "")
-        self.api_key = os.getenv("VLLM_API_KEY", "EMPTY")
+        self.base_url = os.getenv(self._BASE_URL_ENV, "").rstrip("/")
+        self.model = os.getenv(self._MODEL_ENV, "")
+        self.api_key = os.getenv(self._API_KEY_ENV, "EMPTY")
 
         self.client: Optional[AsyncOpenAI] = None
         if self.base_url:
@@ -24,22 +31,27 @@ class VLLMClient:
             if "api.runpod.ai/v2/" in self.base_url:
                 # Runpod OpenAI-compatible endpoint
                 base_url = f"{self.base_url}/openai/v1"
-                api_key = os.getenv("RUNPOD_API_KEY", self.api_key)
-            self.client = AsyncOpenAI(base_url=base_url, api_key=api_key, timeout=DEFAULT_TIMEOUT)
+                api_key = os.getenv(self._RUNPOD_KEY_ENV, self.api_key)
+            self.client = AsyncOpenAI(base_url=base_url, api_key=api_key, timeout=DEFAULT_TIMEOUT, max_retries=0)
 
     async def generate_json(
         self,
-        prompt: str,
+        prompt: str = "",
         strict_json: bool = True,
-        max_retries: int = 2,
+        max_retries: int = 1,
         timeout: int = DEFAULT_TIMEOUT,
+        messages: Optional[list[Dict[str, Any]]] = None,
+        system_prompt: str = DEFAULT_SYSTEM_PROMPT,
+        model: Optional[str] = None,
+        temperature: Optional[float] = None,
+        extra_body: Optional[Dict[str, Any]] = None,
     ) -> Optional[Dict[str, Any]]:
         # JSON 응답을 강제하고 재시도/타임아웃을 적용해 vLLM 응답을 파싱한다.
         if not self.client:
             return None
 
-        messages = [
-            {"role": "system", "content": "You are a helpful analyst."},
+        request_messages = messages or [
+            {"role": "system", "content": system_prompt},
             {"role": "user", "content": self._wrap_prompt(prompt, strict_json)},
         ]
 
@@ -51,9 +63,11 @@ class VLLMClient:
         while attempt <= max_retries:
             try:
                 response = await self.client.chat.completions.create(
-                    model=self.model,
-                    messages=messages,
+                    model=model or self.model,
+                    messages=request_messages,
                     timeout=timeout,
+                    temperature=temperature,
+                    extra_body=extra_body,
                     **extra_kwargs,
                 )
                 content = response.choices[0].message.content or ""
@@ -102,3 +116,12 @@ class VLLMClient:
                 return json.loads(content[start : end + 1])
             except json.JSONDecodeError:
                 return None
+
+
+class VLMClient(VLLMClient):
+    """OCR용 VLM(비전-언어 모델) 클라이언트. VLM_* 환경변수를 사용한다."""
+
+    _BASE_URL_ENV   = "VLM_BASE_URL"
+    _MODEL_ENV      = "VLM_MODEL"
+    _API_KEY_ENV    = "VLM_API_KEY"
+    _RUNPOD_KEY_ENV = "RUNPOD_API_KEY"

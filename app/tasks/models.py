@@ -21,9 +21,10 @@ class TaskType(str, Enum):
     """작업 유형"""
     HEX = "hex"
     JOB = "job"
+    OCR = "ocr" # ocr은 ocr로 추가함
     # 향후 추가 예정
     # IMAGE_GEN = "image_gen"
-    # VLM_ANALYSIS = "vlm_analysis"
+    #VLM_ANALYSIS = "ocr" 
 
 
 class TaskRecord(BaseModel):
