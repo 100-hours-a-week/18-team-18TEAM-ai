@@ -2,6 +2,30 @@
 
 <!-- version list -->
 
+## v0.14.1 (2026-03-03)
+
+### Bug Fixes
+
+- 버전 추가
+  ([`9a7fac5`](https://github.com/100-hours-a-week/18-team-18TEAM-ai/commit/9a7fac5d9aebab15dffc01451c4058c0a9b75f8b))
+
+### Chores
+
+- Cicd 파이프라인 수정
+  ([`9fc82be`](https://github.com/100-hours-a-week/18-team-18TEAM-ai/commit/9fc82bedb07f51d27d0f557074c9cbd94d29642c))
+
+- 파이프라인 수정
+  ([`9b689e8`](https://github.com/100-hours-a-week/18-team-18TEAM-ai/commit/9b689e85d9a794d2dae229b446f2803cba6d8c81))
+
+- 파이프라인 수정
+  ([`dcda86c`](https://github.com/100-hours-a-week/18-team-18TEAM-ai/commit/dcda86c77114ca3b3fa32c9e4234a3fef8e2f2ba))
+
+### Refactoring
+
+- Container 환경에 맞춘 cicd 파이프라인으로 변경
+  ([`7dcb20c`](https://github.com/100-hours-a-week/18-team-18TEAM-ai/commit/7dcb20c20e9e22779e0333d1d45a998171061150))
+
+
 ## v0.14.0 (2026-02-27)
 
 ### Features
