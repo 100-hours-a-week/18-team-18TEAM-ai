@@ -12,7 +12,7 @@ from app.clients.embedding_client import EmbeddingClient
 logger = logging.getLogger(__name__)
 
 COLLECTION_NAME = "job_roles"
-BLOCK_THRESHOLD = 0.85  # cosine similarity 임계값
+BLOCK_THRESHOLD = 0.55  # cosine similarity 임계값
 
 
 @dataclass
