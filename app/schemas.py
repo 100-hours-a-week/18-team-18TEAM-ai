@@ -200,3 +200,42 @@ class OCRAnalyzeResponse(BaseModel):
     # OCR 분석 응답 스키마.
     message: str
     data: Dict[str, Any]
+
+
+# ============================================================
+# Card 스키마
+# ============================================================
+
+
+class StyleTag(str, Enum):
+    CLASSIC = "Classic"
+    MODERN  = "Modern"
+    MINIMAL = "Minimal"
+
+
+class CardInfo(BaseModel):
+    name: str
+    company: str
+    department: Optional[str] = None
+    position:  Optional[str] = None
+    phone:     Optional[str] = None
+    email:     Optional[str] = None
+    address:   Optional[str] = None
+
+
+class CardStyle(BaseModel):
+    tag:  StyleTag       = StyleTag.CLASSIC
+    text: Optional[str] = None
+
+
+class CardGenerateRequest(BaseModel):
+    user_id:   int
+    card_info: CardInfo
+    style:     CardStyle = Field(default_factory=CardStyle)
+
+
+class CardGenerateResponse(BaseModel):
+    message: str
+    data: Dict[str, Any]
+    # data = {"image_data_url": "data:image/png;base64,...",
+    #         "width": 1104, "height": 624, "style_tag": "Classic"}

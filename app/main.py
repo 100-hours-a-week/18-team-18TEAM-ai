@@ -20,7 +20,8 @@ logging.basicConfig(
 
 from app.routers import hex as hex_router
 from app.routers import job as job_router
-from app.routers import ocr as ocr_router # 추가된 ocr
+from app.routers import ocr as ocr_router
+from app.routers import card as card_router
 
 from app.routers import tasks as tasks_router
 
@@ -48,7 +49,8 @@ def create_app() -> FastAPI:
 
     app.include_router(hex_router.router, prefix="/ai")
     app.include_router(job_router.router, prefix="/ai")
-    app.include_router(ocr_router.router, prefix="/ai")  # 추가된 ocr
+    app.include_router(ocr_router.router, prefix="/ai")
+    app.include_router(card_router.router, prefix="/ai")
 
     app.include_router(tasks_router.router, prefix="/ai")
   
