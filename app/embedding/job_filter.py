@@ -135,22 +135,28 @@ class JobRelevanceFilter:
 
         # 규칙 3: bootcamp_student 감지 — dev 규칙보다 먼저 검사
         # 회사명이 부트캠프이면 position이 dev여도 수강생으로 처리
-        if company_dist >= BLOCK_THRESHOLD and company_cat == "bootcamp_student":
+        is_bootcamp = (
+            (company_dist >= BLOCK_THRESHOLD and company_cat == "bootcamp_student")
+            or (pos_dist >= BLOCK_THRESHOLD and pos_cat == "bootcamp_student")
+            or (dept_dist >= BLOCK_THRESHOLD and dept_cat == "bootcamp_student")
+        )
+        if is_bootcamp:
+            # 비개발 트랙 수강생 차단: position이 명확히 non_dev이면 차단
+            if pos_dist >= BLOCK_THRESHOLD and pos_cat == "non_dev":
+                return FilterResult(
+                    blocked=True, confidence=pos_dist,
+                    nearest_role=pos_title, nearest_category=pos_cat,
+                )
+            # 개발 트랙 수강생 (dev이거나 불확실) → LLM에 위임
+            if company_dist >= BLOCK_THRESHOLD and company_cat == "bootcamp_student":
+                best_dist, best_title = company_dist, company_title
+            elif pos_dist >= BLOCK_THRESHOLD and pos_cat == "bootcamp_student":
+                best_dist, best_title = pos_dist, pos_title
+            else:
+                best_dist, best_title = dept_dist, dept_title
             return FilterResult(
-                blocked=False, confidence=company_dist,
-                nearest_role=company_title, nearest_category=company_cat,
-                bootcamp_type="student",
-            )
-        if pos_dist >= BLOCK_THRESHOLD and pos_cat == "bootcamp_student":
-            return FilterResult(
-                blocked=False, confidence=pos_dist,
-                nearest_role=pos_title, nearest_category=pos_cat,
-                bootcamp_type="student",
-            )
-        if dept_dist >= BLOCK_THRESHOLD and dept_cat == "bootcamp_student":
-            return FilterResult(
-                blocked=False, confidence=dept_dist,
-                nearest_role=dept_title, nearest_category=dept_cat,
+                blocked=False, confidence=best_dist,
+                nearest_role=best_title, nearest_category="bootcamp_student",
                 bootcamp_type="student",
             )
 
