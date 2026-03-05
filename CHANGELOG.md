@@ -2,6 +2,14 @@
 
 <!-- version list -->
 
+## v0.16.0 (2026-03-05)
+
+### Features
+
+- 비개발 직무 차단 로직 수정 및 LLM 위임 조건 변경
+  ([`2324aa9`](https://github.com/100-hours-a-week/18-team-18TEAM-ai/commit/2324aa9c7302f72f4c54d7069dbcc5eedb9a253e))
+
+
 ## v0.15.0 (2026-03-04)
 
 ### Features
