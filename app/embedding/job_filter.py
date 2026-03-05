@@ -170,10 +170,10 @@ class JobRelevanceFilter:
                 nearest_role=pos_title, nearest_category=pos_cat,
             )
 
-        # DEV_ROLES 미매칭 포함 모두 → LLM에 위임 (LLM 안전 규칙에서 비개발 직무 처리)
+        # dev 미확인 → 차단
         best = pos_result or dept_result or company_result or {}
         return FilterResult(
-            blocked=False,
+            blocked=True,
             confidence=best.get("distance", 0.0),
             nearest_role=best.get("text", ""),
             nearest_category=best.get("category", ""),
