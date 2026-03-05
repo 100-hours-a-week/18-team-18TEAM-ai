@@ -2,6 +2,31 @@
 
 <!-- version list -->
 
+## v0.16.0 (2026-03-05)
+
+### Features
+
+- 비개발 직무 차단 로직 수정 및 LLM 위임 조건 변경
+  ([`2324aa9`](https://github.com/100-hours-a-week/18-team-18TEAM-ai/commit/2324aa9c7302f72f4c54d7069dbcc5eedb9a253e))
+
+
+## v0.15.0 (2026-03-04)
+
+### Features
+
+- Cosine similarity 임계값을 0.85에서 0.55로 수정
+  ([`775630e`](https://github.com/100-hours-a-week/18-team-18TEAM-ai/commit/775630ed5b5d275a5168d5e72fb501ff5d6594ae))
+
+- 부트캠프 관련 직무 목록에 한국어 및 영어 버전 추가
+  ([`72b5430`](https://github.com/100-hours-a-week/18-team-18TEAM-ai/commit/72b5430a12e2f9d41cf970e4fa42225ff5a28e43))
+
+- 부트캠프 수강생 처리 로직 개선 및 비개발 트랙 차단 규칙 추가
+  ([`2999a6f`](https://github.com/100-hours-a-week/18-team-18TEAM-ai/commit/2999a6f21fe0db529dc4255b18c88544290bd8cf))
+
+- 비개발 직무 차단 로직 개선 및 관련 메시지 추가
+  ([`cf0f89c`](https://github.com/100-hours-a-week/18-team-18TEAM-ai/commit/cf0f89c100bf9e6fe041d37ad69bc816e12d61ad))
+
+
 ## v0.14.1 (2026-03-03)
 
 ### Bug Fixes

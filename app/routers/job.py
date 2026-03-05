@@ -258,7 +258,7 @@ async def analyze_job(
     filter_result = await job_filter.check(payload.department, payload.position, payload.company)
     if filter_result.blocked:
         data = {
-            "introduction": "",
+            "introduction": "개발 직무가 아니어서 분석이 불가능합니다.",
             "search_confidence": 0.0,
             "reason": "부서 또는 직무가 소프트웨어 개발과 관련이 없습니다.",
             "filtered_by": "embedding_classifier",
@@ -303,7 +303,7 @@ async def analyze_job(
         if llm_response:
             if llm_response.get("result") == "관련없음":
                 data = {
-                    "introduction": "",
+                    "introduction": "개발 직무가 아니어서 분석이 불가능합니다.",
                     "search_confidence": confidence,
                     "reason": "부서 또는 직무가 소프트웨어 개발과 관련이 없습니다.",
                 }
