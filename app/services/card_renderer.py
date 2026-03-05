@@ -28,9 +28,12 @@ CARD_HEIGHT = 624
 # 폰트 탐색 경로 (우선순위 순)
 _FONT_SEARCH_DIRS: List[str] = [
     os.getenv("CARD_FONT_DIR", "/app/fonts"),
-    "/usr/share/fonts/truetype/nanum",   # Ubuntu fonts-nanum 패키지
-    "/usr/share/fonts/opentype/noto",    # Noto Sans CJK
-    "/System/Library/Fonts",             # macOS
+    os.path.join(os.path.expanduser("~"), "Library", "Fonts"),   # macOS Homebrew cask
+    "/Library/Fonts",                                             # macOS 시스템 폰트
+    "/usr/share/fonts/truetype/nanum",                            # Ubuntu fonts-nanum
+    "/usr/share/fonts/opentype/noto",                             # Noto Sans CJK
+    # 프로젝트 내 fonts 디렉터리 (상대 경로 폴백)
+    os.path.join(os.path.dirname(__file__), "..", "..", "fonts"),
 ]
 _FONT_NAME_REGULAR = "NanumGothic.ttf"
 _FONT_NAME_BOLD    = "NanumGothicBold.ttf"
