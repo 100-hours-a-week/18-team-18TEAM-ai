@@ -270,18 +270,29 @@ class JobWorker(BaseWorker):
                     bootcamp_type=filter_result.bootcamp_type,
                 )
 
-                if llm_result:
-                    if llm_result.get("result") == "관련없음":
-                        result = {
-                            "message": "not_relevant",
-                            "data": {
-                                "introduction": "개발 직무가 아니어서 분석이 불가능합니다.",
-                                "search_confidence": confidence,
-                                "reason": "부서 또는 직무가 소프트웨어 개발과 관련이 없습니다.",
-                            }
+                if llm_result is None:
+                    result = {
+                        "message": "llm_error",
+                        "data": {
+                            "introduction": "AI 서버 연결에 실패했습니다. 잠시 후 다시 시도해주세요.",
+                            "search_confidence": confidence,
+                            "reason": "vLLM 호출 실패",
+                        },
+                    }
+                    await self.mark_completed(result)
+                    return result
+                elif llm_result.get("result") == "관련없음":
+                    result = {
+                        "message": "not_relevant",
+                        "data": {
+                            "introduction": "개발 직무가 아니어서 분석이 불가능합니다.",
+                            "search_confidence": confidence,
+                            "reason": "부서 또는 직무가 소프트웨어 개발과 관련이 없습니다.",
                         }
-                        await self.mark_completed(result)
-                        return result
+                    }
+                    await self.mark_completed(result)
+                    return result
+                else:
                     introduction = llm_result.get("introduction", introduction)
 
             # 7. 결과 구성

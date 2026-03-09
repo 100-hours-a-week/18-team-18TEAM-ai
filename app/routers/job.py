@@ -300,14 +300,21 @@ async def analyze_job(
         )
 
         # LLM 응답에서 introduction 추출
-        if llm_response:
-            if llm_response.get("result") == "관련없음":
-                data = {
-                    "introduction": "개발 직무가 아니어서 분석이 불가능합니다.",
-                    "search_confidence": confidence,
-                    "reason": "부서 또는 직무가 소프트웨어 개발과 관련이 없습니다.",
-                }
-                return JobAnalyzeResponse(message="not_relevant", data=data)
+        if llm_response is None:
+            data = {
+                "introduction": "AI 서버 연결에 실패했습니다. 잠시 후 다시 시도해주세요.",
+                "search_confidence": confidence,
+                "reason": "vLLM 호출 실패",
+            }
+            return JobAnalyzeResponse(message="llm_error", data=data)
+        elif llm_response.get("result") == "관련없음":
+            data = {
+                "introduction": "개발 직무가 아니어서 분석이 불가능합니다.",
+                "search_confidence": confidence,
+                "reason": "부서 또는 직무가 소프트웨어 개발과 관련이 없습니다.",
+            }
+            return JobAnalyzeResponse(message="not_relevant", data=data)
+        else:
             introduction = llm_response.get("introduction", introduction)
 
     # 최종 응답 데이터 구성
