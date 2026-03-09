@@ -7,3 +7,5 @@ openai>=1.0.0
 redis>=5.0.0
 Pillow>=12.1.1
 python-multipart>=0.0.9
+sentence-transformers>=2.0.0
+pymilvus>=2.5.3

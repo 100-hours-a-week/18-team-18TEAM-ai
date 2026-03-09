@@ -2,25 +2,37 @@
 
 from __future__ import annotations
 
+import asyncio
 import logging
 
 from app.clients.embedding_client import EmbeddingClient
+from app.embedding.embedding_model import EmbeddingModel
+from app.embedding.milvus_client import MilvusManager
 from app.embedding.seed_data import BOOTCAMP_STUDENT_ROLES, DEV_ROLES, INSTRUCTOR_ROLES, IRRELEVANT_ROLES, NON_DEV_ROLES
 
 logger = logging.getLogger(__name__)
 
 
 async def init_embedding() -> None:
-    """앱 시작 시 Milvus 컬렉션 생성 및 시드 데이터를 로드한다."""
-    client = EmbeddingClient()
-
-    # 헬스체크
+    """앱 시작 시 임베딩 모델 로드, Milvus 연결, 컬렉션 생성 및 시드 데이터를 로드한다."""
+    # 임베딩 모델 로드 (CPU-bound → executor)
     try:
-        health = await client.health()
-        logger.info("임베딩 서비스 상태: %s", health.get("status"))
+        loop = asyncio.get_event_loop()
+        await loop.run_in_executor(None, EmbeddingModel.get_instance)
+        logger.info("임베딩 모델 로드 완료")
     except Exception as e:
-        logger.warning("임베딩 서비스 연결 실패 - 필터/캐시 비활성: %s", e)
+        logger.warning("임베딩 모델 로드 실패 - 필터/캐시 비활성: %s", e)
         return
+
+    # Milvus 연결
+    try:
+        await MilvusManager.get_instance()
+        logger.info("Milvus 연결 완료")
+    except Exception as e:
+        logger.warning("Milvus 연결 실패 - 필터/캐시 비활성: %s", e)
+        return
+
+    client = EmbeddingClient()
 
     # 컬렉션 생성
     for name, desc in [

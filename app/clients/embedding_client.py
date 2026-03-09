@@ -1,53 +1,33 @@
-"""임베딩 서비스 HTTP 클라이언트"""
+"""임베딩 클라이언트 — 로컬 모델 + Milvus 직접 호출"""
 
 from __future__ import annotations
 
+import asyncio
 import logging
-import os
 from typing import Any, Dict, List, Optional
 
-import httpx
+from app.embedding.embedding_model import EmbeddingModel
+from app.embedding.milvus_client import MilvusManager
 
 logger = logging.getLogger(__name__)
 
 
 class EmbeddingClient:
-    """별도 임베딩 서비스(port 8100)와 HTTP로 통신하는 클라이언트."""
-
-    def __init__(self) -> None:
-        self.base_url = os.getenv(
-            "EMBEDDING_SERVICE_URL", "http://localhost:8100"
-        )
-        self.timeout = float(os.getenv("EMBEDDING_SERVICE_TIMEOUT", "3.0"))
-
-    async def health(self) -> Dict[str, Any]:
-        """임베딩 서비스 헬스체크."""
-        async with httpx.AsyncClient(timeout=self.timeout) as client:
-            resp = await client.get(f"{self.base_url}/health")
-            resp.raise_for_status()
-            return resp.json()
+    """임베딩 모델과 Milvus를 직접 사용하는 클라이언트."""
 
     # ── 임베딩 ──
 
     async def embed(self, text: str) -> List[float]:
         """단일 텍스트를 임베딩 벡터로 변환한다."""
-        async with httpx.AsyncClient(timeout=self.timeout) as client:
-            resp = await client.post(
-                f"{self.base_url}/embed",
-                json={"text": text},
-            )
-            resp.raise_for_status()
-            return resp.json()["embedding"]
+        model = EmbeddingModel.get_instance()
+        loop = asyncio.get_event_loop()
+        return await loop.run_in_executor(None, model.encode, text)
 
     async def embed_batch(self, texts: List[str]) -> List[List[float]]:
         """여러 텍스트를 배치로 임베딩한다."""
-        async with httpx.AsyncClient(timeout=self.timeout) as client:
-            resp = await client.post(
-                f"{self.base_url}/embed/batch",
-                json={"texts": texts},
-            )
-            resp.raise_for_status()
-            return resp.json()["embeddings"]
+        model = EmbeddingModel.get_instance()
+        loop = asyncio.get_event_loop()
+        return await loop.run_in_executor(None, model.encode_batch, texts)
 
     # ── 컬렉션 관리 ──
 
@@ -58,24 +38,14 @@ class EmbeddingClient:
         description: str = "",
     ) -> Dict[str, str]:
         """Milvus 컬렉션을 생성한다."""
-        async with httpx.AsyncClient(timeout=self.timeout) as client:
-            resp = await client.post(
-                f"{self.base_url}/collection/create",
-                json={
-                    "name": name,
-                    "dimension": dimension,
-                    "description": description,
-                },
-            )
-            resp.raise_for_status()
-            return resp.json()
+        milvus = await MilvusManager.get_instance()
+        result = await milvus.create_collection(name=name, dim=dimension, description=description)
+        return {"collection": result["collection"], "status": result["status"]}
 
     async def list_collections(self) -> List[str]:
         """모든 컬렉션 목록을 반환한다."""
-        async with httpx.AsyncClient(timeout=self.timeout) as client:
-            resp = await client.get(f"{self.base_url}/collection/list")
-            resp.raise_for_status()
-            return resp.json()["collections"]
+        milvus = await MilvusManager.get_instance()
+        return await milvus.list_collections()
 
     # ── 데이터 삽입 ──
 
@@ -86,13 +56,18 @@ class EmbeddingClient:
         auto_embed: bool = True,
     ) -> Dict[str, Any]:
         """벡터 + 메타데이터를 컬렉션에 삽입한다."""
-        async with httpx.AsyncClient(timeout=self.timeout) as client:
-            resp = await client.post(
-                f"{self.base_url}/collection/{collection_name}/insert",
-                json={"items": items, "auto_embed": auto_embed},
-            )
-            resp.raise_for_status()
-            return resp.json()
+        if auto_embed:
+            model = EmbeddingModel.get_instance()
+            loop = asyncio.get_event_loop()
+            texts = [item["text"] for item in items]
+            vectors = await loop.run_in_executor(None, model.encode_batch, texts)
+            items = [
+                {**item, "embedding": vector}
+                for item, vector in zip(items, vectors)
+            ]
+
+        milvus = await MilvusManager.get_instance()
+        return await milvus.insert(collection_name=collection_name, data=items)
 
     # ── 검색 ──
 
@@ -104,17 +79,30 @@ class EmbeddingClient:
         output_fields: Optional[List[str]] = None,
     ) -> List[Dict[str, Any]]:
         """텍스트로 유사도 검색한다."""
-        payload: Dict[str, Any] = {"query": query, "limit": limit}
-        if output_fields:
-            payload["output_fields"] = output_fields
+        model = EmbeddingModel.get_instance()
+        loop = asyncio.get_event_loop()
+        vector = await loop.run_in_executor(None, model.encode, query)
 
-        async with httpx.AsyncClient(timeout=self.timeout) as client:
-            resp = await client.post(
-                f"{self.base_url}/collection/{collection_name}/search",
-                json=payload,
-            )
-            resp.raise_for_status()
-            return resp.json()["results"]
+        milvus = await MilvusManager.get_instance()
+        raw = await milvus.search(
+            collection_name=collection_name,
+            query_vectors=[vector],
+            limit=limit,
+            output_fields=output_fields,
+        )
+
+        # raw[0]: 첫 번째 쿼리의 결과 목록, entity 필드를 평탄화
+        hits = raw[0] if raw else []
+        return [
+            {
+                "id": hit["id"],
+                "distance": hit["distance"],
+                "text": hit["entity"].get("text", ""),
+                "category": hit["entity"].get("category", ""),
+                "metadata": hit["entity"].get("metadata", {}),
+            }
+            for hit in hits
+        ]
 
     async def search_by_vector(
         self,
@@ -124,17 +112,22 @@ class EmbeddingClient:
         output_fields: Optional[List[str]] = None,
     ) -> List[Dict[str, Any]]:
         """벡터로 직접 유사도 검색한다."""
-        payload: Dict[str, Any] = {
-            "query_vector": query_vector,
-            "limit": limit,
-        }
-        if output_fields:
-            payload["output_fields"] = output_fields
+        milvus = await MilvusManager.get_instance()
+        raw = await milvus.search(
+            collection_name=collection_name,
+            query_vectors=[query_vector],
+            limit=limit,
+            output_fields=output_fields,
+        )
 
-        async with httpx.AsyncClient(timeout=self.timeout) as client:
-            resp = await client.post(
-                f"{self.base_url}/collection/{collection_name}/search/vector",
-                json=payload,
-            )
-            resp.raise_for_status()
-            return resp.json()["results"]
+        hits = raw[0] if raw else []
+        return [
+            {
+                "id": hit["id"],
+                "distance": hit["distance"],
+                "text": hit["entity"].get("text", ""),
+                "category": hit["entity"].get("category", ""),
+                "metadata": hit["entity"].get("metadata", {}),
+            }
+            for hit in hits
+        ]
