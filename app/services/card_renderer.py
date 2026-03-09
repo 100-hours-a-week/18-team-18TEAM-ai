@@ -12,11 +12,14 @@ import asyncio
 import base64
 import io
 import os
-from typing import Any, Dict, List, Optional, Tuple
+from typing import TYPE_CHECKING, Any, Dict, List, Optional, Tuple
 
 import cv2
 import numpy as np
 from PIL import Image, ImageDraw, ImageFont
+
+if TYPE_CHECKING:
+    from app.services.card_layout_planner import CardLayoutPlan, ShapeLayout
 
 # ──────────────────────────────────────────────
 # 상수
@@ -344,7 +347,7 @@ def _render_card_sync(
     return f"data:image/png;base64,{b64}"
 
 # ──────────────────────────────────────────────
-# 퍼블릭 비동기 래퍼
+# 퍼블릭 비동기 래퍼 (기존)
 # ──────────────────────────────────────────────
 
 async def render_card(
@@ -363,3 +366,101 @@ async def render_card(
         card_info,
         template,
     )
+
+
+# ──────────────────────────────────────────────
+# 동적 레이아웃 렌더링 (CardLayoutPlan 사용)
+# ──────────────────────────────────────────────
+
+async def render_card_with_plan(
+    background_data_url: str,
+    card_info: Dict[str, Any],
+    layout_plan: "CardLayoutPlan",
+) -> str:
+    """CardLayoutPlan을 받아 명함을 렌더링한다.
+
+    PIL/OpenCV는 동기 CPU 작업이므로 asyncio.to_thread로 실행한다.
+    """
+    return await asyncio.to_thread(
+        _render_card_sync_with_plan,
+        background_data_url,
+        card_info,
+        layout_plan,
+    )
+
+
+def _load_and_resize(
+    background_data_url: str,
+    width: int = CARD_WIDTH,
+    height: int = CARD_HEIGHT,
+) -> Image.Image:
+    """배경 Data URL을 디코딩하고 목표 해상도로 리사이즈한다."""
+    if "," in background_data_url:
+        _, encoded = background_data_url.split(",", 1)
+    else:
+        encoded = background_data_url
+    img_bytes = base64.b64decode(encoded)
+    img = Image.open(io.BytesIO(img_bytes)).convert("RGB")
+    return img.resize((width, height), Image.LANCZOS)
+
+
+def _shape_layout_to_dict(shape: "ShapeLayout") -> Dict[str, Any]:
+    """ShapeLayout 데이터클래스를 _draw_shapes_cv2가 기대하는 dict로 변환한다."""
+    d: Dict[str, Any] = {
+        "type":  shape.type,
+        "color": shape.color,
+        "alpha": shape.alpha,
+    }
+    if shape.type == "circle":
+        d.update({"cx": shape.cx, "cy": shape.cy, "r": shape.r})
+    elif shape.type == "rect":
+        d.update({"x1": shape.x1, "y1": shape.y1, "x2": shape.x2, "y2": shape.y2})
+    elif shape.type == "line":
+        d.update({
+            "x1": shape.x1, "y1": shape.y1, "x2": shape.x2, "y2": shape.y2,
+            "thickness": shape.thickness or 2,
+        })
+    return d
+
+
+def _render_card_sync_with_plan(
+    background_data_url: str,
+    card_info: Dict[str, Any],
+    layout_plan: "CardLayoutPlan",
+    width: int = CARD_WIDTH,
+    height: int = CARD_HEIGHT,
+) -> str:
+    """CardLayoutPlan 기반 동기 렌더링."""
+    # 1. 배경 로드 + 리사이즈
+    img = _load_and_resize(background_data_url, width, height)
+
+    # 2. OpenCV로 도형 그리기
+    if layout_plan.shapes:
+        shape_dicts = [_shape_layout_to_dict(s) for s in layout_plan.shapes]
+        img = _draw_shapes_cv2(img, shape_dicts)
+
+    # 3. PIL로 구분선 + 텍스트 그리기
+    draw = ImageDraw.Draw(img)
+
+    if layout_plan.divider:
+        d = layout_plan.divider
+        draw.line(
+            [(d.x1, d.y1), (d.x2, d.y2)],
+            fill=d.color,
+            width=d.thickness,
+        )
+
+    for field_name, fl in layout_plan.fields.items():
+        if not fl.visible:
+            continue
+        text = card_info.get(field_name) or ""
+        if not text:
+            continue
+        font = _fit_font(draw, text, max_width=_MAX_TEXT_WIDTH, size=fl.size, bold=fl.bold)
+        draw.text((fl.x, fl.y), text, font=font, fill=fl.color, anchor="lt")
+
+    # 4. PNG 인코딩 → Base64 반환
+    buf = io.BytesIO()
+    img.save(buf, format="PNG", optimize=True)
+    b64 = base64.b64encode(buf.getvalue()).decode()
+    return f"data:image/png;base64,{b64}"

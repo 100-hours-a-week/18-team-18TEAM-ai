@@ -20,14 +20,12 @@ from fastapi import APIRouter, Header, HTTPException
 from app.schemas import (
     CardGenerateRequest,
     CardGenerateResponse,
-    StyleTag,
     TaskStatus,
     TaskSubmitResponse,
 )
 from app.tasks.models import TaskType
 from app.tasks.producer import get_producer
-from app.clients.comfyui_client import ComfyUIClient, _make_fallback_data_url
-from app.services.card_renderer import render_card, LAYOUT_TEMPLATES
+from app.services.card_pipeline import run_card_pipeline
 
 router = APIRouter()
 
@@ -47,98 +45,19 @@ def _save_card_image(data_url: str, filename: str) -> str:
 
 
 # ──────────────────────────────────────────────
-# SDXL 프롬프트 설정
-# ──────────────────────────────────────────────
-
-_TAG_PROMPTS: Dict[str, str] = {
-    StyleTag.CLASSIC: (
-        "classic minimal background, warm ivory linen paper texture, subtle aged grain, "
-        "soft candlelight from top-right, gentle shadow gradient, "
-        "elegant negative space center-right for text overlay, "
-        "timeless stationery mood, no text"
-    ),
-    StyleTag.GEOMETRIC: (
-        "geometric minimal background, clean cool white coated surface, "
-        "ultra-thin intersecting grid lines barely visible, "
-        "sharp diagonal shadow from top-left corner, "
-        "crisp high-contrast negative space, architectural precision mood, no text"
-    ),
-    StyleTag.VINTAGE: (
-        "vintage minimal background, warm sepia-toned aged paper texture, "
-        "faint antique foxing marks at edges, "
-        "soft diffused golden-hour light from top, gentle yellowed gradient toward center, "
-        "large nostalgic negative space, retro stationery mood, no text"
-    ),
-    StyleTag.VIVID: (
-        "vivid minimal background, saturated deep coral-to-amber smooth gradient, "
-        "bold directional light from top-left, "
-        "clean geometric negative space at center-right, "
-        "high contrast dynamic energy, contemporary vibrant mood, no text"
-    ),
-    StyleTag.LUXURIOUS: (
-        "luxury minimal background, deep charcoal matte surface with ultra-subtle dark marble veining, "
-        "single pearl silver highlight near top-right edge, premium negative space, "
-        "soft rim lighting with controlled reflections, opulent corporate mood, no text"
-    ),
-    StyleTag.TEXTURED: (
-        "textured minimal background, rough natural cotton rag paper, "
-        "visible fiber weave and surface bumps, "
-        "raking side light from left to emphasize depth and texture relief, "
-        "large clean negative space center-right, artisanal handmade stationery mood, no text"
-    ),
-}
-
-_NEGATIVE_PROMPT = (
-    "text, letters, numbers, typography, words, calligraphy, logo, watermark, "
-    "signature, qr code, barcode, label, sticker, signage, poster, writing, characters"
-)
-
-# ──────────────────────────────────────────────
 # 헬퍼
 # ──────────────────────────────────────────────
 
-def _get_sdxl_prompt(style_tag: str) -> str:
-    return _TAG_PROMPTS.get(style_tag, _TAG_PROMPTS[StyleTag.CLASSIC])
-
-
 async def _generate_card(payload: CardGenerateRequest) -> Dict[str, Any]:
     """공통 명함 생성 로직."""
-    style_tag  = payload.style.tag
-    card_info  = payload.card_info.model_dump()
-    sdxl_prompt = _get_sdxl_prompt(style_tag)
-
-    # 1. SDXL 배경 생성 (ComfyUI)
-    comfy = ComfyUIClient()
-    background_data_url = await comfy.generate(
-        prompt=sdxl_prompt,
-        negative_prompt=_NEGATIVE_PROMPT,
-        width=1152,
-        height=640,
+    data = await run_card_pipeline(
+        card_info=payload.card_info.model_dump(),
+        style_tag=payload.style.tag,
+        style_text=payload.style.text,
     )
-
-    # 2. ComfyUI 미설정 시 단색 배경 폴백
-    if background_data_url is None:
-        template = LAYOUT_TEMPLATES.get(style_tag, LAYOUT_TEMPLATES["Classic"])
-        accent   = template.get("accent_color", (30, 50, 100))
-        background_data_url = _make_fallback_data_url(accent, width=1152, height=640)
-
-    # 3. OpenCV+PIL 텍스트 오버레이 (1152x640 → 1104x624 리사이즈 포함)
-    result_data_url = await render_card(
-        background_data_url=background_data_url,
-        card_info=card_info,
-        style_tag=style_tag,
-    )
-
     filename = f"{uuid.uuid4()}.png"
-    image_url = _save_card_image(result_data_url, filename)
-
-    return {
-        "image_data_url": result_data_url,
-        "image_url":      image_url,
-        "width":          1104,
-        "height":         624,
-        "style_tag":      style_tag,
-    }
+    image_url = _save_card_image(data["image_data_url"], filename)
+    return {**data, "image_url": image_url}
 
 # ──────────────────────────────────────────────
 # 엔드포인트
