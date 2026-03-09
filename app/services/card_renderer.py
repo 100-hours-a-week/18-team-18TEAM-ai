@@ -35,8 +35,8 @@ _FONT_SEARCH_DIRS: List[str] = [
     # 프로젝트 내 fonts 디렉터리 (상대 경로 폴백)
     os.path.join(os.path.dirname(__file__), "..", "..", "fonts"),
 ]
-_FONT_NAME_REGULAR = "NanumGothic.ttf"
-_FONT_NAME_BOLD    = "NanumGothicBold.ttf"
+_FONT_NAME_REGULAR = "NanumGothic-Regular.ttf"
+_FONT_NAME_BOLD    = "NanumGothic-Bold.ttf"
 
 # ──────────────────────────────────────────────
 # 레이아웃 템플릿 (1104x624 기준)
