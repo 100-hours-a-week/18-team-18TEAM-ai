@@ -208,9 +208,12 @@ class OCRAnalyzeResponse(BaseModel):
 
 
 class StyleTag(str, Enum):
-    CLASSIC = "Classic"
-    MODERN  = "Modern"
-    MINIMAL = "Minimal"
+    CLASSIC   = "Classic"
+    GEOMETRIC = "Geometric"
+    VINTAGE   = "Vintage"
+    VIVID     = "Vivid"
+    LUXURIOUS = "Luxurious"
+    TEXTURED  = "Textured"
 
 
 class CardInfo(BaseModel):

@@ -31,3 +31,4 @@ dist/
 *.sqlite
 *.db
 
+*.png

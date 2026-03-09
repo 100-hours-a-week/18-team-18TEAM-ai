@@ -44,7 +44,7 @@ _FONT_NAME_BOLD    = "NanumGothic-Bold.ttf"
 
 LAYOUT_TEMPLATES: Dict[str, Dict[str, Any]] = {
     "Classic": {
-        # 좌상단 큰 원 + 우하단 텍스트
+        # 좌상단 큰 원 + 우측 텍스트 (따뜻한 아이보리 계열)
         "shapes": [
             {
                 "type": "circle", "cx": -70, "cy": -70, "r": 230,
@@ -70,47 +70,118 @@ LAYOUT_TEMPLATES: Dict[str, Dict[str, Any]] = {
         },
         "accent_color": (30, 50, 100),
     },
-    "Modern": {
-        # 상단 가로 밴드 + 좌측 텍스트
+    "Geometric": {
+        # 상단·하단 얇은 검정 줄 + 수평 구분선 + 좌측 텍스트
         "shapes": [
             {
                 "type": "rect",
-                "x1": 0, "y1": 0, "x2": 1104, "y2": 140,
-                "color": (20, 100, 180), "alpha": 1.0,
+                "x1": 0, "y1": 0, "x2": 1104, "y2": 6,
+                "color": (40, 40, 40), "alpha": 1.0,
+            },
+            {
+                "type": "rect",
+                "x1": 0, "y1": 618, "x2": 1104, "y2": 624,
+                "color": (40, 40, 40), "alpha": 1.0,
             },
         ],
-        "divider": None,
-        "fields": {
-            "name":       {"x": 70, "y": 170, "size": 40, "bold": True,  "color": (20,  20,  20)},
-            "position":   {"x": 70, "y": 225, "size": 20, "bold": False, "color": (90,  90,  90)},
-            "company":    {"x": 70, "y":  55, "size": 26, "bold": True,  "color": (255, 255, 255)},
-            "department": {"x": 70, "y":  90, "size": 18, "bold": False, "color": (210, 230, 255)},
-            "phone":      {"x": 70, "y": 450, "size": 16, "bold": False, "color": (110, 110, 110)},
-            "email":      {"x": 70, "y": 474, "size": 16, "bold": False, "color": (110, 110, 110)},
-            "address":    {"x": 70, "y": 498, "size": 14, "bold": False, "color": (130, 130, 130)},
+        "divider": {
+            "x1": 70, "y1": 318, "x2": 520, "y2": 318,
+            "color": (40, 40, 40), "thickness": 1,
         },
-        "accent_color": (20, 100, 180),
+        "fields": {
+            "name":       {"x": 70, "y": 180, "size": 40, "bold": True,  "color": (20,  20,  20)},
+            "position":   {"x": 70, "y": 236, "size": 18, "bold": False, "color": (80,  80,  80)},
+            "company":    {"x": 70, "y": 264, "size": 18, "bold": False, "color": (80,  80,  80)},
+            "department": {"x": 70, "y": 290, "size": 15, "bold": False, "color": (110, 110, 110)},
+            "phone":      {"x": 70, "y": 430, "size": 15, "bold": False, "color": (110, 110, 110)},
+            "email":      {"x": 70, "y": 452, "size": 15, "bold": False, "color": (110, 110, 110)},
+            "address":    {"x": 70, "y": 474, "size": 13, "bold": False, "color": (130, 130, 130)},
+        },
+        "accent_color": (40, 40, 40),
     },
-    "Minimal": {
-        # 세로 얇은 선 + 좌측 정렬
+    "Vintage": {
+        # 도형 없음 + 세피아 수평 구분선 + 좌측 텍스트 (갈색 계열)
+        "shapes": [],
+        "divider": {
+            "x1": 110, "y1": 355, "x2": 550, "y2": 355,
+            "color": (120, 90, 50), "thickness": 1,
+        },
+        "fields": {
+            "name":       {"x": 110, "y": 220, "size": 40, "bold": False, "color": (60,  40,  20)},
+            "position":   {"x": 110, "y": 275, "size": 18, "bold": False, "color": (100, 70,  40)},
+            "company":    {"x": 110, "y": 305, "size": 18, "bold": False, "color": (100, 70,  40)},
+            "department": {"x": 110, "y": 332, "size": 15, "bold": False, "color": (120, 90,  60)},
+            "phone":      {"x": 110, "y": 420, "size": 15, "bold": False, "color": (120, 90,  60)},
+            "email":      {"x": 110, "y": 442, "size": 15, "bold": False, "color": (120, 90,  60)},
+            "address":    {"x": 110, "y": 464, "size": 13, "bold": False, "color": (140, 110, 80)},
+        },
+        "accent_color": (120, 90, 50),
+    },
+    "Vivid": {
+        # 하단 코럴 색 밴드 + 상단 대형 텍스트 / 하단 흰 텍스트
         "shapes": [
             {
                 "type": "rect",
-                "x1": 70, "y1": 230, "x2": 72, "y2": 530,
-                "color": (180, 160, 120), "alpha": 1.0,
+                "x1": 0, "y1": 480, "x2": 1104, "y2": 624,
+                "color": (220, 80, 50), "alpha": 0.95,
             },
         ],
         "divider": None,
         "fields": {
-            "name":       {"x": 110, "y": 230, "size": 40, "bold": False, "color": (20,  20,  20)},
-            "position":   {"x": 110, "y": 285, "size": 18, "bold": False, "color": (90,  90,  90)},
-            "company":    {"x": 110, "y": 316, "size": 18, "bold": False, "color": (90,  90,  90)},
-            "department": {"x": 110, "y": 344, "size": 16, "bold": False, "color": (110, 110, 110)},
-            "phone":      {"x": 110, "y": 430, "size": 15, "bold": False, "color": (110, 110, 110)},
-            "email":      {"x": 110, "y": 452, "size": 15, "bold": False, "color": (110, 110, 110)},
-            "address":    {"x": 110, "y": 474, "size": 13, "bold": False, "color": (130, 130, 130)},
+            "name":       {"x": 70, "y": 150, "size": 44, "bold": True,  "color": (20,  20,  20)},
+            "position":   {"x": 70, "y": 210, "size": 20, "bold": False, "color": (70,  70,  70)},
+            "company":    {"x": 70, "y": 242, "size": 20, "bold": False, "color": (70,  70,  70)},
+            "department": {"x": 70, "y": 270, "size": 16, "bold": False, "color": (100, 100, 100)},
+            "phone":      {"x": 70, "y": 495, "size": 16, "bold": False, "color": (255, 255, 255)},
+            "email":      {"x": 70, "y": 518, "size": 16, "bold": False, "color": (255, 255, 255)},
+            "address":    {"x": 70, "y": 542, "size": 13, "bold": False, "color": (240, 220, 220)},
         },
-        "accent_color": (180, 160, 120),
+        "accent_color": (220, 80, 50),
+    },
+    "Luxurious": {
+        # 좌측 다크 반투명 패널 + 골드 구분선 + 골드·회색 텍스트
+        "shapes": [
+            {
+                "type": "rect",
+                "x1": 0, "y1": 0, "x2": 520, "y2": 624,
+                "color": (20, 20, 25), "alpha": 0.90,
+            },
+        ],
+        "divider": {
+            "x1": 80, "y1": 350, "x2": 440, "y2": 350,
+            "color": (180, 150, 80), "thickness": 1,
+        },
+        "fields": {
+            "name":       {"x": 90, "y": 220, "size": 38, "bold": True,  "color": (220, 190, 100)},
+            "position":   {"x": 90, "y": 276, "size": 18, "bold": False, "color": (180, 180, 180)},
+            "company":    {"x": 90, "y": 306, "size": 18, "bold": False, "color": (180, 180, 180)},
+            "department": {"x": 90, "y": 334, "size": 14, "bold": False, "color": (150, 150, 150)},
+            "phone":      {"x": 90, "y": 370, "size": 14, "bold": False, "color": (160, 160, 160)},
+            "email":      {"x": 90, "y": 392, "size": 14, "bold": False, "color": (160, 160, 160)},
+            "address":    {"x": 90, "y": 414, "size": 12, "bold": False, "color": (140, 140, 140)},
+        },
+        "accent_color": (180, 150, 80),
+    },
+    "Textured": {
+        # 세로 베이지 선 + 좌측 정렬 (따뜻한 갈색 계열)
+        "shapes": [
+            {
+                "type": "rect",
+                "x1": 70, "y1": 220, "x2": 73, "y2": 540,
+                "color": (150, 120, 80), "alpha": 1.0,
+            },
+        ],
+        "divider": None,
+        "fields": {
+            "name":       {"x": 110, "y": 220, "size": 40, "bold": False, "color": (40,  30,  20)},
+            "position":   {"x": 110, "y": 275, "size": 18, "bold": False, "color": (90,  70,  50)},
+            "company":    {"x": 110, "y": 305, "size": 18, "bold": False, "color": (90,  70,  50)},
+            "department": {"x": 110, "y": 334, "size": 15, "bold": False, "color": (110, 90,  70)},
+            "phone":      {"x": 110, "y": 440, "size": 15, "bold": False, "color": (110, 90,  70)},
+            "email":      {"x": 110, "y": 462, "size": 15, "bold": False, "color": (110, 90,  70)},
+            "address":    {"x": 110, "y": 484, "size": 13, "bold": False, "color": (130, 110, 90)},
+        },
+        "accent_color": (150, 120, 80),
     },
 }
 

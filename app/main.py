@@ -9,8 +9,9 @@ from dotenv import load_dotenv
 # 모듈 임포트 전에 .env 로드 (각 모듈의 os.getenv가 올바른 값을 읽도록)
 load_dotenv()
 
-from fastapi import FastAPI
+from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import FileResponse
 
 logging.basicConfig(
     level=logging.INFO,
@@ -53,7 +54,17 @@ def create_app() -> FastAPI:
     app.include_router(card_router.router, prefix="/ai")
 
     app.include_router(tasks_router.router, prefix="/ai")
-  
+
+    # 개발/테스트용: 생성된 명함 이미지 파일 서빙
+    _CARDS_DIR = os.path.join(os.path.dirname(__file__), "..", "generated_cards")
+
+    @app.get("/ai/cards/{filename}")
+    async def serve_card(filename: str) -> FileResponse:
+        path = os.path.join(_CARDS_DIR, filename)
+        if not os.path.isfile(path):
+            raise HTTPException(status_code=404, detail="Not found")
+        return FileResponse(path, media_type="image/png")
+
     @app.get("/ai/health")
     async def health() -> dict[str, str]:
         # 간단한 헬스 체크 엔드포인트.

@@ -120,10 +120,14 @@ class ComfyUIClient:
             raw = output.get("message") or output.get("image")
             if raw is None and isinstance(output.get("images"), list):
                 item = output["images"][0]
-                raw  = item if isinstance(item, str) else item.get("base64")
+                raw  = item if isinstance(item, str) else (
+                    item.get("base64") or item.get("data") or item.get("image")
+                )
         elif isinstance(output, list) and output:
             item = output[0]
-            raw  = item if isinstance(item, str) else item.get("base64") or item.get("message")
+            raw  = item if isinstance(item, str) else (
+                item.get("base64") or item.get("data") or item.get("message")
+            )
 
         if not raw:
             raise RuntimeError(f"Cannot extract image from RunPod output: {output}")
