@@ -2,6 +2,31 @@
 
 <!-- version list -->
 
+## v0.17.0 (2026-03-13)
+
+### Bug Fixes
+
+- 폰트 파일 이름을 정규화된 형식으로 수정
+  ([`5f2d79b`](https://github.com/100-hours-a-week/18-team-18TEAM-ai/commit/5f2d79b10476c580d3e469992f6ddd8efd5ad369))
+
+### Features
+
+- ComfyUIClient에서 RunPod API로 변경 및 환경변수 설정 추가
+  ([`370c62e`](https://github.com/100-hours-a-week/18-team-18TEAM-ai/commit/370c62e36b74ff2d074808ee2fd515b7e4bfdcd5))
+
+- 명함 생성 기능 개선 및 이미지 서빙 엔드포인트 추가
+  ([`0504adf`](https://github.com/100-hours-a-week/18-team-18TEAM-ai/commit/0504adfd38aa31926229c6b76e9988997ce449ab))
+
+- 명함 생성 기능 추가 및 ComfyUI 클라이언트 구현
+  ([`12bf057`](https://github.com/100-hours-a-week/18-team-18TEAM-ai/commit/12bf057b6f7b5a286c35de137dc31221bcc91f00))
+
+- 명함 생성 파이프라인 구현 및 레이아웃 플래너 추가
+  ([`d896527`](https://github.com/100-hours-a-week/18-team-18TEAM-ai/commit/d89652742607ff686135bad0013b0dc655ecac8e))
+
+- 카드 파이프라인 및 렌더링 레이아웃 수정 및 테스트 추가
+  ([`48042a0`](https://github.com/100-hours-a-week/18-team-18TEAM-ai/commit/48042a0760f73dc86a2bd604c5e31c3f6bea12a4))
+
+
 ## v0.16.0 (2026-03-05)
 
 ### Features
