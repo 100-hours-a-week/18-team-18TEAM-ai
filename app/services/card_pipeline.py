@@ -17,7 +17,7 @@ from typing import Any, Dict, Optional
 
 from app.clients.comfyui_client import ComfyUIClient, _make_fallback_data_url
 from app.services.card_layout_planner import (
-    analyze_background_image,
+    analyze_background_with_vlm,
     plan_from_style,
 )
 from app.services.card_renderer import LAYOUT_TEMPLATES, render_card_with_plan
@@ -67,8 +67,8 @@ async def run_card_pipeline(
         background_data_url = _make_fallback_data_url(accent, width=1152, height=640)
         logger.info("run_card_pipeline: ComfyUI 미설정, 단색 배경 사용 (style_tag=%s)", style_tag)
 
-    # ── Step 3: PIL/numpy 이미지 분석 → CardLayoutPlan ────────────────
-    layout_plan = analyze_background_image(
+    # ── Step 3: VLM 이미지 분석 → CardLayoutPlan (실패 시 PIL/numpy 폴백) ──
+    layout_plan = await analyze_background_with_vlm(
         background_data_url=background_data_url,
         layout_hint=layout_hint,
         style_tag=style_tag,
