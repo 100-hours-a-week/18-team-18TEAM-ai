@@ -10,6 +10,7 @@ import base64
 import os
 from typing import Any, Dict
 
+from app.tasks.card_image_store import put_card_image_data_url
 from app.tasks.registry import register_worker
 from app.tasks.workers.base import BaseWorker
 from app.services.card_pipeline import run_card_pipeline
@@ -46,12 +47,16 @@ class CardWorker(BaseWorker):
             )
 
             await self.update_progress("rendering_text")
+            image_data_url = data["image_data_url"]
+            await put_card_image_data_url(self.task_id, image_data_url)
             filename  = f"{self.task_id}.png"
-            image_url = _save_card_image(data["image_data_url"], filename)
+            image_url = _save_card_image(image_data_url, filename)
+            result_data = {k: v for k, v in data.items() if k != "image_data_url"}
+            result_data["image_url"] = image_url
 
             result = {
                 "message": "ok",
-                "data": {**data, "image_url": image_url},
+                "data": result_data,
             }
             await self.mark_completed(result)
             return result

@@ -7,6 +7,7 @@ from typing import Any, Dict
 from fastapi import APIRouter, HTTPException
 
 from app.schemas import TaskStatusResponse, TaskStatus
+from app.tasks.card_image_store import get_card_image_data_url
 from app.tasks.store import TaskStore
 
 router = APIRouter()
@@ -65,4 +66,20 @@ async def get_task_result(task_id: str) -> Dict[str, Any]:
         )
 
     # completed
-    return record.result or {}
+    result = record.result or {}
+    task_type = record.task_type.value if hasattr(record.task_type, "value") else str(record.task_type)
+    if task_type != "card":
+        return result
+
+    # 카드 결과는 Data URL을 별도 Redis 키에 짧은 TTL로 보관한 뒤 조회 시 주입한다.
+    image_data_url = await get_card_image_data_url(task_id)
+    if not image_data_url:
+        return result
+
+    wrapped = dict(result)
+    data = wrapped.get("data")
+    if isinstance(data, dict):
+        merged_data = dict(data)
+        merged_data["image_data_url"] = image_data_url
+        wrapped["data"] = merged_data
+    return wrapped
