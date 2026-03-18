@@ -457,7 +457,7 @@ def _render_card_sync_with_plan(
         if not text:
             continue
         font = _fit_font(draw, text, max_width=_MAX_TEXT_WIDTH, size=fl.size, bold=fl.bold)
-        draw.text((fl.x, fl.y), text, font=font, fill=fl.color, anchor="lt")
+        draw.text((fl.x, fl.y), text, font=font, fill=fl.color, anchor=getattr(fl, "anchor", "lt"))
 
     # 4. PNG 인코딩 → Base64 반환
     buf = io.BytesIO()

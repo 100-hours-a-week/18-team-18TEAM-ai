@@ -232,6 +232,7 @@ class FieldLayout:
     size: int
     bold: bool
     color: Tuple[int, int, int]
+    anchor: str = "lt"
     visible: bool = True
 
 
@@ -303,7 +304,8 @@ async def plan_from_style(style_tag: str, style_text: Optional[str]) -> Dict[str
             extra_body={"chat_template_kwargs": {"enable_thinking": False}},
         )
         if result and _validate_call1(result):
-            return result
+            return _normalize_call1(result)
+        logger.warning("plan_from_style: call1 응답 스키마 불일치, 폴백 사용")
     except Exception as e:
         logger.warning("plan_from_style LLM 호출 실패: %s", e)
 
@@ -322,11 +324,41 @@ def _hardcoded_prompt(style_tag: str) -> Dict[str, Any]:
 
 
 def _validate_call1(result: Dict[str, Any]) -> bool:
-    return (
-        isinstance(result.get("sdxl_prompt"), str)
-        and len(result["sdxl_prompt"]) > 20
-        and isinstance(result.get("layout_hint"), dict)
-    )
+    if not isinstance(result, dict):
+        return False
+    prompt = result.get("sdxl_prompt")
+    if not isinstance(prompt, str) or len(prompt.strip()) <= 20:
+        return False
+    negative = result.get("sdxl_negative_prompt")
+    if negative is not None and (not isinstance(negative, str) or not negative.strip()):
+        return False
+    return isinstance(result.get("layout_hint"), dict)
+
+
+def _normalize_layout_hint(layout_hint: Any) -> Dict[str, Any]:
+    if not isinstance(layout_hint, dict):
+        return {}
+
+    normalized: Dict[str, Any] = {}
+    text_region = layout_hint.get("text_region")
+    if text_region in ("left", "right"):
+        normalized["text_region"] = text_region
+
+    arrangement = layout_hint.get("arrangement")
+    normalized["arrangement"] = arrangement if arrangement in _VALID_ARRANGEMENTS else "split"
+    return normalized
+
+
+def _normalize_call1(result: Dict[str, Any]) -> Dict[str, Any]:
+    negative = result.get("sdxl_negative_prompt")
+    if not isinstance(negative, str) or not negative.strip():
+        negative = _NEGATIVE_PROMPT
+
+    return {
+        "sdxl_prompt": result["sdxl_prompt"].strip(),
+        "sdxl_negative_prompt": negative.strip(),
+        "layout_hint": _normalize_layout_hint(result.get("layout_hint")),
+    }
 
 
 # ──────────────────────────────────────────────
@@ -805,12 +837,7 @@ def _layout_centered(
     name_color, info_color, sub_color, divider_color,
     scale: float = 1.0,
 ) -> Tuple[Dict[str, FieldLayout], Optional[DividerLayout]]:
-    """중앙 정렬: 텍스트를 영역 중앙 기준으로 배치. 중간 크기 정사각형에 적합.
-
-    Note: PIL draw.text anchor="mm"(중앙)을 쓰지 않고 x좌표를 영역 중앙에 맞춘다.
-    실제 중앙 정렬은 렌더러에서 anchor를 바꿔야 하므로, 여기서는 cx를 x로 전달한다.
-    렌더러 측에서 FieldLayout.align 필드를 지원하기 전까지는 왼쪽 정렬 기준 cx.
-    """
+    """중앙 정렬: 텍스트를 영역 중앙 기준으로 배치. 중간 크기 정사각형에 적합."""
     cx = (x1 + x2) // 2
     ny = _calc_name_y(y1, y2)
     h = y2 - ny
@@ -823,13 +850,13 @@ def _layout_centered(
 
     sub_step = int(sub_size * 1.65)
     fields = {
-        "name":       FieldLayout(x=cx, y=ny,                     size=name_size, bold=True,  color=name_color),
-        "position":   FieldLayout(x=cx, y=ny + line_h,            size=info_size, bold=True,  color=info_color),
-        "company":    FieldLayout(x=cx, y=ny + line_h + step,     size=info_size, bold=True,  color=info_color),
-        "department": FieldLayout(x=cx, y=ny + line_h + step * 2, size=sub_size,  bold=False, color=sub_color),
-        "phone":      FieldLayout(x=cx, y=divider_y + 14,              size=sub_size,  bold=False, color=sub_color),
-        "email":      FieldLayout(x=cx, y=divider_y + 14 + sub_step,   size=sub_size,  bold=False, color=sub_color),
-        "address":    FieldLayout(x=cx, y=divider_y + 14 + sub_step*2, size=int(14 * scale), bold=False, color=sub_color),
+        "name":       FieldLayout(x=cx, y=ny,                     size=name_size, bold=True,  color=name_color, anchor="mt"),
+        "position":   FieldLayout(x=cx, y=ny + line_h,            size=info_size, bold=True,  color=info_color, anchor="mt"),
+        "company":    FieldLayout(x=cx, y=ny + line_h + step,     size=info_size, bold=True,  color=info_color, anchor="mt"),
+        "department": FieldLayout(x=cx, y=ny + line_h + step * 2, size=sub_size,  bold=False, color=sub_color, anchor="mt"),
+        "phone":      FieldLayout(x=cx, y=divider_y + 14,              size=sub_size,  bold=False, color=sub_color, anchor="mt"),
+        "email":      FieldLayout(x=cx, y=divider_y + 14 + sub_step,   size=sub_size,  bold=False, color=sub_color, anchor="mt"),
+        "address":    FieldLayout(x=cx, y=divider_y + 14 + sub_step*2, size=int(14 * scale), bold=False, color=sub_color, anchor="mt"),
     }
     divider = DividerLayout(x1=x1 + 20, y1=divider_y, x2=x2 - 20, y2=divider_y, color=divider_color)
     return fields, divider
@@ -994,13 +1021,13 @@ def _layout_minimal(
     addr_y    = email_y + contact_gap
 
     fields = {
-        "name":       FieldLayout(x=cx, y=start_y,  size=name_size, bold=True,  color=name_color),
-        "position":   FieldLayout(x=cx, y=pos_y,    size=pos_size,  bold=True,  color=info_color),
-        "company":    FieldLayout(x=cx, y=company_y, size=pos_size,  bold=True,  color=info_color),
-        "department": FieldLayout(x=cx, y=dept_y,   size=sub_size,  bold=False, color=sub_color),
-        "phone":      FieldLayout(x=cx, y=phone_y,  size=sub_size,  bold=False, color=sub_color),
-        "email":      FieldLayout(x=cx, y=email_y,  size=sub_size,  bold=False, color=sub_color),
-        "address":    FieldLayout(x=cx, y=addr_y,   size=int(13 * scale), bold=False, color=sub_color),
+        "name":       FieldLayout(x=cx, y=start_y,  size=name_size, bold=True,  color=name_color, anchor="mt"),
+        "position":   FieldLayout(x=cx, y=pos_y,    size=pos_size,  bold=True,  color=info_color, anchor="mt"),
+        "company":    FieldLayout(x=cx, y=company_y, size=pos_size,  bold=True,  color=info_color, anchor="mt"),
+        "department": FieldLayout(x=cx, y=dept_y,   size=sub_size,  bold=False, color=sub_color, anchor="mt"),
+        "phone":      FieldLayout(x=cx, y=phone_y,  size=sub_size,  bold=False, color=sub_color, anchor="mt"),
+        "email":      FieldLayout(x=cx, y=email_y,  size=sub_size,  bold=False, color=sub_color, anchor="mt"),
+        "address":    FieldLayout(x=cx, y=addr_y,   size=int(13 * scale), bold=False, color=sub_color, anchor="mt"),
     }
     divider = DividerLayout(x1=x1 + 40, y1=divider_y, x2=x2 - 40, y2=divider_y, color=divider_color)
     return fields, divider

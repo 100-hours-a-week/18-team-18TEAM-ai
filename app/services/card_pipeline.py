@@ -24,6 +24,11 @@ from app.services.card_renderer import LAYOUT_TEMPLATES, render_card_with_plan
 
 logger = logging.getLogger(__name__)
 
+_DEFAULT_NEGATIVE_PROMPT = (
+    "text, letters, numbers, typography, words, calligraphy, logo, watermark, "
+    "signature, qr code, barcode, label, sticker, signage, poster, writing, characters"
+)
+
 
 async def run_card_pipeline(
     card_info: Dict[str, Any],
@@ -47,9 +52,19 @@ async def run_card_pipeline(
     """
     # ── Step 1: VLLMClient — style.text → SDXL 프롬프트 + layout_hint ──
     call1 = await plan_from_style(style_tag=style_tag, style_text=style_text)
-    sdxl_prompt          = call1["sdxl_prompt"]
-    sdxl_negative_prompt = call1["sdxl_negative_prompt"]
-    layout_hint          = call1.get("layout_hint", {})
+    sdxl_prompt = call1.get("sdxl_prompt")
+    if not isinstance(sdxl_prompt, str) or not sdxl_prompt.strip():
+        logger.warning("run_card_pipeline: call1 prompt 누락, 하드코딩 프롬프트로 재시도")
+        call1 = await plan_from_style(style_tag=style_tag, style_text=None)
+        sdxl_prompt = call1["sdxl_prompt"]
+
+    sdxl_negative_prompt = call1.get("sdxl_negative_prompt")
+    if not isinstance(sdxl_negative_prompt, str) or not sdxl_negative_prompt.strip():
+        logger.warning("run_card_pipeline: negative prompt 누락, 기본 negative prompt 사용")
+        sdxl_negative_prompt = _DEFAULT_NEGATIVE_PROMPT
+
+    layout_hint_raw = call1.get("layout_hint")
+    layout_hint = layout_hint_raw if isinstance(layout_hint_raw, dict) else {}
 
     # ── Step 2: SDXL 배경 생성 ────────────────────────────────────────
     comfy = ComfyUIClient()
