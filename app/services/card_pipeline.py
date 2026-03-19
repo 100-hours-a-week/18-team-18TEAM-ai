@@ -15,12 +15,12 @@ from __future__ import annotations
 import logging
 from typing import Any, Dict, Optional
 
-from app.clients.comfyui_client import ComfyUIClient, _make_fallback_data_url
+from app.clients.comfyui_client import ComfyUIClient
 from app.services.card_layout_planner import (
     analyze_background_with_vlm,
     plan_from_style,
 )
-from app.services.card_renderer import LAYOUT_TEMPLATES, render_card_with_plan
+from app.services.card_renderer import render_card_with_plan
 
 logger = logging.getLogger(__name__)
 
@@ -74,13 +74,6 @@ async def run_card_pipeline(
         width=1152,
         height=640,
     )
-
-    if background_data_url is None:
-        # RunPod 미설정 시 단색 배경 폴백
-        template = LAYOUT_TEMPLATES.get(style_tag, LAYOUT_TEMPLATES["Classic"])
-        accent = template.get("accent_color", (30, 50, 100))
-        background_data_url = _make_fallback_data_url(accent, width=1152, height=640)
-        logger.info("run_card_pipeline: ComfyUI 미설정, 단색 배경 사용 (style_tag=%s)", style_tag)
 
     # ── Step 3: VLM 이미지 분석 → CardLayoutPlan (실패 시 PIL/numpy 폴백) ──
     layout_plan = await analyze_background_with_vlm(

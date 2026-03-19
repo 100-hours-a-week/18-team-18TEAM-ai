@@ -1,17 +1,16 @@
 from __future__ import annotations
 
 import asyncio
-import base64
-import io
+import logging
 import os
 import random
 from typing import Any, Optional
 
 import httpx
-from PIL import Image
 
 _RUNPOD_BASE      = "https://api.runpod.ai/v2"
 _TERMINAL_STATUSES = {"COMPLETED", "FAILED", "CANCELLED", "TIMED_OUT"}
+logger = logging.getLogger(__name__)
 
 
 class ComfyUIClient:
@@ -23,6 +22,8 @@ class ComfyUIClient:
 
     _POLL_INTERVAL = 3    # 폴링 간격 (초)
     _POLL_MAX      = 100  # 최대 폴링 횟수 (300초)
+    _MAX_RETRIES   = 1    # 최초 1회 + 재시도 1회
+    _RETRY_DELAY   = 1.5  # 초
 
     def __init__(self) -> None:
         self.api_key     = os.getenv(self._API_KEY_ENV, "")
@@ -37,19 +38,36 @@ class ComfyUIClient:
         height: int = 640,
         steps: int = 25,
         cfg: float = 7.5,
-    ) -> Optional[str]:
-        # RUNPOD_API_KEY 또는 RUNPOD_ENDPOINT_ID 미설정 시 None 반환 (폴백 트리거)
+    ) -> str:
+        # 필수 설정이 없으면 즉시 실패시켜 상위 파이프라인에서 작업 실패로 처리한다.
         if not self.api_key or not self.endpoint_id:
-            return None
+            raise RuntimeError("RunPod image generation is not configured")
 
-        workflow = self._build_workflow(prompt, negative_prompt, width, height, steps, cfg)
         base_url = f"{_RUNPOD_BASE}/{self.endpoint_id}"
-        headers  = {"Authorization": f"Bearer {self.api_key}"}
+        headers = {"Authorization": f"Bearer {self.api_key}"}
+        last_error: Exception | None = None
 
-        async with httpx.AsyncClient(timeout=httpx.Timeout(30.0), headers=headers) as client:
-            job_id = await self._submit(client, base_url, workflow)
-            output = await self._poll_until_done(client, base_url, job_id)
-            return self._extract_image(output)
+        for attempt in range(self._MAX_RETRIES + 1):
+            workflow = self._build_workflow(prompt, negative_prompt, width, height, steps, cfg)
+            try:
+                async with httpx.AsyncClient(timeout=httpx.Timeout(30.0), headers=headers) as client:
+                    job_id = await self._submit(client, base_url, workflow)
+                    output = await self._poll_until_done(client, base_url, job_id)
+                    return self._extract_image(output)
+            except (httpx.HTTPError, RuntimeError, TimeoutError) as exc:
+                last_error = exc
+                if attempt >= self._MAX_RETRIES:
+                    break
+                logger.warning(
+                    "ComfyUI generate attempt %s/%s failed, retrying: %s",
+                    attempt + 1,
+                    self._MAX_RETRIES + 1,
+                    exc,
+                )
+                await asyncio.sleep(self._RETRY_DELAY * (attempt + 1))
+
+        assert last_error is not None
+        raise RuntimeError(f"RunPod image generation failed after retries: {last_error}") from last_error
 
     def _build_workflow(
         self, prompt: str, negative: str, width: int, height: int, steps: int, cfg: float
@@ -132,16 +150,3 @@ class ComfyUIClient:
         if not raw:
             raise RuntimeError(f"Cannot extract image from RunPod output: {output}")
         return raw if raw.startswith("data:") else f"data:image/png;base64,{raw}"
-
-
-def _make_fallback_data_url(
-    accent_color: tuple[int, int, int],
-    width: int = 1152,
-    height: int = 640,
-) -> str:
-    """RunPod 미설정 시 PIL 단색 배경 생성 (개발 환경 폴백)."""
-    img = Image.new("RGB", (width, height), color=accent_color)
-    buf = io.BytesIO()
-    img.save(buf, format="PNG")
-    b64 = base64.b64encode(buf.getvalue()).decode()
-    return f"data:image/png;base64,{b64}"
