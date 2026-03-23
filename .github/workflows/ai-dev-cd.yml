@@ -1,9 +1,8 @@
 name: CD - Dev(AI)
 
 on:
-  pull_request:
-    branches: [ "develop" ]
-    types: [ closed ]
+  push:
+    branches: ["develop"]
 
 permissions:
   contents: write
@@ -11,12 +10,12 @@ permissions:
   pull-requests: write
 
 concurrency:
-  group: ai-dev-cd-${{ github.event.pull_request.number }}
+  group: ai-dev-cd-${{ github.ref }}
   cancel-in-progress: true
 
 jobs:
   deploy:
-    if: github.event.pull_request.merged == true
+    if: github.actor != 'github-actions[bot]'
     runs-on: ubuntu-24.04-arm
     timeout-minutes: 20
 
