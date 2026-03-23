@@ -2,6 +2,24 @@
 
 <!-- version list -->
 
+## v0.17.1 (2026-03-23)
+
+### Bug Fixes
+
+- Install nanum fonts in AI image
+  ([`44f3c87`](https://github.com/100-hours-a-week/18-team-18TEAM-ai/commit/44f3c877703c4cc9123b61c79d71d320c246389e))
+
+### Chores
+
+- Switch AI CD to GitOps manifests
+  ([`2cf11de`](https://github.com/100-hours-a-week/18-team-18TEAM-ai/commit/2cf11deff6804aa2409c61be67217a1ad2354777))
+
+### Refactoring
+
+- ArgoCD 적용
+  ([`481d85b`](https://github.com/100-hours-a-week/18-team-18TEAM-ai/commit/481d85b7ae6c537e33ae45f31ee4f72eb346c09d))
+
+
 ## v0.17.0 (2026-03-13)
 
 ### Bug Fixes
