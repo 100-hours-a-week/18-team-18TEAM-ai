@@ -50,10 +50,11 @@ def create_app() -> FastAPI:
 
     app.include_router(hex_router.router, prefix="/ai")
     app.include_router(job_router.router, prefix="/ai")
-    app.include_router(ocr_router.router, prefix="/ai")
     app.include_router(card_router.router, prefix="/ai")
 
-    app.include_router(tasks_router.router, prefix="/ai")
+    app.include_router(ocr_router.router, include_in_schema=False)
+    app.include_router(tasks_router.router, include_in_schema=False)
+
 
     # 개발/테스트용: 생성된 명함 이미지 파일 서빙
     _CARDS_DIR = os.path.join(os.path.dirname(__file__), "..", "generated_cards")
