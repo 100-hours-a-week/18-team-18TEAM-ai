@@ -51,7 +51,10 @@ def create_app() -> FastAPI:
     app.include_router(hex_router.router, prefix="/ai")
     app.include_router(job_router.router, prefix="/ai")
     app.include_router(card_router.router, prefix="/ai")
+    app.include_router(ocr_router.router, prefix="/ai")
+    app.include_router(tasks_router.router, prefix="/ai")
 
+    # FE/BFF가 아직 /ai prefix를 제거하는 동안 OCR 경로만 레거시 경로도 허용한다.
     app.include_router(ocr_router.router, include_in_schema=False)
     app.include_router(tasks_router.router, include_in_schema=False)
 

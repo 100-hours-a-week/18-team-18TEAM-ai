@@ -17,12 +17,15 @@ class VLLMClient:
     _MODEL_ENV      = "VLLM_MODEL"
     _API_KEY_ENV    = "VLLM_API_KEY"
     _RUNPOD_KEY_ENV = "RUNPOD_API_KEY"
+    _FALLBACK_BASE_URL_ENV: str | None = None
+    _FALLBACK_MODEL_ENV: str | None = None
+    _FALLBACK_API_KEY_ENV: str | None = None
 
     def __init__(self) -> None:
         # vLLM 엔드포인트 및 인증 정보를 환경변수에서 로드한다.
-        self.base_url = os.getenv(self._BASE_URL_ENV, "").rstrip("/")
-        self.model = os.getenv(self._MODEL_ENV, "")
-        self.api_key = os.getenv(self._API_KEY_ENV, "EMPTY")
+        self.base_url = self._read_env(self._BASE_URL_ENV, self._FALLBACK_BASE_URL_ENV).rstrip("/")
+        self.model = self._read_env(self._MODEL_ENV, self._FALLBACK_MODEL_ENV)
+        self.api_key = self._read_env(self._API_KEY_ENV, self._FALLBACK_API_KEY_ENV, default="EMPTY")
 
         self.client: Optional[AsyncOpenAI] = None
         if self.base_url:
@@ -33,6 +36,17 @@ class VLLMClient:
                 base_url = f"{self.base_url}/openai/v1"
                 api_key = os.getenv(self._RUNPOD_KEY_ENV, self.api_key)
             self.client = AsyncOpenAI(base_url=base_url, api_key=api_key, timeout=DEFAULT_TIMEOUT, max_retries=0)
+
+    @staticmethod
+    def _read_env(primary: str, fallback: str | None = None, default: str = "") -> str:
+        value = os.getenv(primary, "")
+        if value:
+            return value
+        if fallback:
+            fallback_value = os.getenv(fallback, "")
+            if fallback_value:
+                return fallback_value
+        return default
 
     async def generate_json(
         self,
@@ -125,3 +139,6 @@ class VLMClient(VLLMClient):
     _MODEL_ENV      = "VLM_MODEL"
     _API_KEY_ENV    = "VLM_API_KEY"
     _RUNPOD_KEY_ENV = "RUNPOD_API_KEY"
+    _FALLBACK_BASE_URL_ENV = "VLLM_BASE_URL"
+    _FALLBACK_MODEL_ENV = "VLLM_MODEL"
+    _FALLBACK_API_KEY_ENV = "VLLM_API_KEY"
