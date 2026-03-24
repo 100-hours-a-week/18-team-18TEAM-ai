@@ -2,6 +2,14 @@
 
 <!-- version list -->
 
+## v0.17.2 (2026-03-24)
+
+### Bug Fixes
+
+- **ai**: Restore OCR route compatibility and VLM fallback
+  ([`b2c371f`](https://github.com/100-hours-a-week/18-team-18TEAM-ai/commit/b2c371f9286cabd9bad6d893d58dc63fc4b54180))
+
+
 ## v0.17.1 (2026-03-23)
 
 ### Bug Fixes
