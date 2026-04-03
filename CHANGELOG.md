@@ -2,6 +2,82 @@
 
 <!-- version list -->
 
+## v0.17.2 (2026-03-24)
+
+### Bug Fixes
+
+- **ai**: Restore OCR route compatibility and VLM fallback
+  ([`b2c371f`](https://github.com/100-hours-a-week/18-team-18TEAM-ai/commit/b2c371f9286cabd9bad6d893d58dc63fc4b54180))
+
+
+## v0.17.1 (2026-03-23)
+
+### Bug Fixes
+
+- Install nanum fonts in AI image
+  ([`44f3c87`](https://github.com/100-hours-a-week/18-team-18TEAM-ai/commit/44f3c877703c4cc9123b61c79d71d320c246389e))
+
+### Chores
+
+- Switch AI CD to GitOps manifests
+  ([`2cf11de`](https://github.com/100-hours-a-week/18-team-18TEAM-ai/commit/2cf11deff6804aa2409c61be67217a1ad2354777))
+
+### Refactoring
+
+- ArgoCD 적용
+  ([`481d85b`](https://github.com/100-hours-a-week/18-team-18TEAM-ai/commit/481d85b7ae6c537e33ae45f31ee4f72eb346c09d))
+
+
+## v0.17.0 (2026-03-13)
+
+### Bug Fixes
+
+- 폰트 파일 이름을 정규화된 형식으로 수정
+  ([`5f2d79b`](https://github.com/100-hours-a-week/18-team-18TEAM-ai/commit/5f2d79b10476c580d3e469992f6ddd8efd5ad369))
+
+### Features
+
+- ComfyUIClient에서 RunPod API로 변경 및 환경변수 설정 추가
+  ([`370c62e`](https://github.com/100-hours-a-week/18-team-18TEAM-ai/commit/370c62e36b74ff2d074808ee2fd515b7e4bfdcd5))
+
+- 명함 생성 기능 개선 및 이미지 서빙 엔드포인트 추가
+  ([`0504adf`](https://github.com/100-hours-a-week/18-team-18TEAM-ai/commit/0504adfd38aa31926229c6b76e9988997ce449ab))
+
+- 명함 생성 기능 추가 및 ComfyUI 클라이언트 구현
+  ([`12bf057`](https://github.com/100-hours-a-week/18-team-18TEAM-ai/commit/12bf057b6f7b5a286c35de137dc31221bcc91f00))
+
+- 명함 생성 파이프라인 구현 및 레이아웃 플래너 추가
+  ([`d896527`](https://github.com/100-hours-a-week/18-team-18TEAM-ai/commit/d89652742607ff686135bad0013b0dc655ecac8e))
+
+- 카드 파이프라인 및 렌더링 레이아웃 수정 및 테스트 추가
+  ([`48042a0`](https://github.com/100-hours-a-week/18-team-18TEAM-ai/commit/48042a0760f73dc86a2bd604c5e31c3f6bea12a4))
+
+
+## v0.16.0 (2026-03-05)
+
+### Features
+
+- 비개발 직무 차단 로직 수정 및 LLM 위임 조건 변경
+  ([`2324aa9`](https://github.com/100-hours-a-week/18-team-18TEAM-ai/commit/2324aa9c7302f72f4c54d7069dbcc5eedb9a253e))
+
+
+## v0.15.0 (2026-03-04)
+
+### Features
+
+- Cosine similarity 임계값을 0.85에서 0.55로 수정
+  ([`775630e`](https://github.com/100-hours-a-week/18-team-18TEAM-ai/commit/775630ed5b5d275a5168d5e72fb501ff5d6594ae))
+
+- 부트캠프 관련 직무 목록에 한국어 및 영어 버전 추가
+  ([`72b5430`](https://github.com/100-hours-a-week/18-team-18TEAM-ai/commit/72b5430a12e2f9d41cf970e4fa42225ff5a28e43))
+
+- 부트캠프 수강생 처리 로직 개선 및 비개발 트랙 차단 규칙 추가
+  ([`2999a6f`](https://github.com/100-hours-a-week/18-team-18TEAM-ai/commit/2999a6f21fe0db529dc4255b18c88544290bd8cf))
+
+- 비개발 직무 차단 로직 개선 및 관련 메시지 추가
+  ([`cf0f89c`](https://github.com/100-hours-a-week/18-team-18TEAM-ai/commit/cf0f89c100bf9e6fe041d37ad69bc816e12d61ad))
+
+
 ## v0.14.1 (2026-03-03)
 
 ### Bug Fixes

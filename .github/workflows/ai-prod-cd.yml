@@ -137,78 +137,21 @@ jobs:
           echo "IMAGE_URI=${IMAGE_URI}" >> "$GITHUB_ENV"
           echo "IMAGE_TAG=${IMAGE_TAG}" >> "$GITHUB_ENV"
 
-      - name: Build CodeDeploy bundle (AI container)
+      - name: Update cloud repo manifest for ArgoCD
         shell: bash
+        env:
+          CLOUD_REPO_TOKEN: ${{ secrets.CLOUD_REPO_TOKEN || secrets.RELEASE_TOKEN || secrets.GITHUB_TOKEN }}
+          CLOUD_REPO_BRANCH: main
         run: |
           set -euo pipefail
-          VERSION="${{ steps.ver.outputs.value }}"
-          BUCKET="${{ secrets.S3_BUCKET }}"
-          S3_PREFIX="${{ secrets.S3_PREFIX }}"
-
-          if [[ -z "${BUCKET}" ]]; then
-            echo "S3_BUCKET secret is required" >&2
-            exit 1
-          fi
-          if [[ -z "${S3_PREFIX}" ]]; then
-            S3_PREFIX="artifacts"
-          fi
-
-          rm -rf bundle
-          mkdir -p bundle/deploy
-
-          cp deploy/appspec-container.yml bundle/appspec.yml
-          cp deploy/start-container.sh bundle/deploy/start-container.sh
-          cp deploy/stop-container.sh bundle/deploy/stop-container.sh
-          cp deploy/validate-container.sh bundle/deploy/validate-container.sh
-          cp deploy/deploy-ai-container.sh bundle/deploy/deploy-ai-container.sh
-
-          chmod +x bundle/deploy/start-container.sh bundle/deploy/stop-container.sh bundle/deploy/validate-container.sh bundle/deploy/deploy-ai-container.sh
-
-          cat > bundle/deploy/env.sh <<EOF_ENV
-          RELEASE_ID='${VERSION}'
-          APP_STAGE='${APP_STAGE}'
-          IMAGE_URI='${IMAGE_URI}'
-          HEALTH_CHECK_URL='${HEALTH_URL}'
-          EOF_ENV
-
-          (cd bundle && zip -r ../bundle.zip .)
-          unzip -l bundle.zip
-
-          BUNDLE_KEY="${S3_PREFIX}/${APP_STAGE}/codedeploy/ai/${VERSION}/bundle-${{ github.run_id }}.zip"
-          aws s3 cp bundle.zip "s3://$BUCKET/$BUNDLE_KEY"
-
-          echo "BUCKET=$BUCKET" >> "$GITHUB_ENV"
-          echo "BUNDLE_KEY=$BUNDLE_KEY" >> "$GITHUB_ENV"
-
-      - name: Create CodeDeploy deployment & wait
-        shell: bash
-        run: |
-          set -euo pipefail
-
-          APP="${{ secrets.CODEDEPLOY_APP_AI_PROD }}"
-          DG="${{ secrets.CODEDEPLOY_DG_AI_PROD }}"
-          : "${BUCKET:?S3 bucket is required (set S3_BUCKET secret)}"
-          : "${BUNDLE_KEY:?BUNDLE_KEY is required}"
-          echo "BUCKET=$BUCKET"
-          echo "BUNDLE_KEY=$BUNDLE_KEY"
-
-          DEPLOY_ID="$(aws deploy create-deployment \
-            --application-name "$APP" \
-            --deployment-group-name "$DG" \
-            --s3-location bucket="$BUCKET",key="$BUNDLE_KEY",bundleType=zip \
-            --file-exists-behavior OVERWRITE \
-            --query "deploymentId" --output text)"
-
-          echo "deploymentId=$DEPLOY_ID"
-          aws deploy wait deployment-successful --deployment-id "$DEPLOY_ID"
-          echo "CodeDeploy SUCCESS"
+          bash scripts/update-cloud-gitops-manifests.sh "${APP_STAGE}" "${IMAGE_URI}"
 
       - name: Notify Discord on failure
         if: failure()
         env:
           DISCORD_WEBHOOK_URL: ${{ secrets.DISCORD_WEBHOOK_URL }}
         run: |
-          MESSAGE="AI PROD CD 실패
+          MESSAGE="AI PROD GitOps CD 실패
           Repo: \`${{ github.repository }}\`
           Branch: \`${{ github.ref_name }}\`
           Workflow: \`${{ github.workflow }}\`
@@ -225,7 +168,7 @@ jobs:
         env:
           DISCORD_WEBHOOK_URL: ${{ secrets.DISCORD_WEBHOOK_URL }}
         run: |
-          MESSAGE="✅ AI PROD CD 성공 ✅
+          MESSAGE="✅ AI PROD GitOps CD 성공 ✅
           Repo: \`${{ github.repository }}\`
           Branch: \`${{ github.ref_name }}\`
           Workflow: \`${{ github.workflow }}\`

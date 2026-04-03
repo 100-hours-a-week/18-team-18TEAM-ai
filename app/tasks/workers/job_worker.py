@@ -227,7 +227,7 @@ class JobWorker(BaseWorker):
                 result = {
                     "message": "not_relevant",
                     "data": {
-                        "introduction": "",
+                        "introduction": "개발 직무가 아니어서 분석이 불가능합니다.",
                         "search_confidence": 0.0,
                         "reason": "부서 또는 직무가 소프트웨어 개발과 관련이 없습니다.",
                         "filtered_by": "embedding_classifier",
@@ -275,7 +275,7 @@ class JobWorker(BaseWorker):
                         result = {
                             "message": "not_relevant",
                             "data": {
-                                "introduction": "",
+                                "introduction": "개발 직무가 아니어서 분석이 불가능합니다.",
                                 "search_confidence": confidence,
                                 "reason": "부서 또는 직무가 소프트웨어 개발과 관련이 없습니다.",
                             }

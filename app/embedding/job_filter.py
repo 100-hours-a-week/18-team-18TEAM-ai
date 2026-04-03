@@ -12,7 +12,7 @@ from app.clients.embedding_client import EmbeddingClient
 logger = logging.getLogger(__name__)
 
 COLLECTION_NAME = "job_roles"
-BLOCK_THRESHOLD = 0.85  # cosine similarity 임계값
+BLOCK_THRESHOLD = 0.55  # cosine similarity 임계값
 
 
 @dataclass
@@ -35,8 +35,7 @@ def _empty_result() -> FilterResult:
 class JobRelevanceFilter:
     """임베딩 유사도로 직무가 개발 관련인지 판별한다.
 
-    부서와 직무를 **각각 병렬** 검색하여 둘 중 하나라도
-    non_dev 고유사도이면 차단한다.
+    irrelevant(장난값) 감지 시 차단하고, 그 외는 LLM에 위임한다.
     """
 
     def __init__(self) -> None:
@@ -64,8 +63,8 @@ class JobRelevanceFilter:
         1. 부서 또는 직무가 irrelevant(장난값)이면 → 무조건 차단
         2. 직무가 instructor이면 → 통과 (부트캠프 강사는 수강생이 아님)
         3. 직무·부서·회사 중 하나가 bootcamp_student이면 → 통과 + 수강생 마킹
-        4. 직무가 dev 이면 → 통과 (부서가 non_dev여도 허용)
-        5. 직무가 non_dev 이면 → 차단
+        4. DEV_ROLES와 유사도가 높으면 → 통과
+        5. 그 외 → LLM에 위임 (LLM 안전 규칙에서 비개발 직무 처리)
 
         Returns:
             FilterResult:
@@ -135,22 +134,32 @@ class JobRelevanceFilter:
 
         # 규칙 3: bootcamp_student 감지 — dev 규칙보다 먼저 검사
         # 회사명이 부트캠프이면 position이 dev여도 수강생으로 처리
-        if company_dist >= BLOCK_THRESHOLD and company_cat == "bootcamp_student":
-            return FilterResult(
-                blocked=False, confidence=company_dist,
-                nearest_role=company_title, nearest_category=company_cat,
-                bootcamp_type="student",
+        is_bootcamp = (
+            (company_dist >= BLOCK_THRESHOLD and company_cat == "bootcamp_student")
+            or (pos_dist >= BLOCK_THRESHOLD and pos_cat == "bootcamp_student")
+            or (dept_dist >= BLOCK_THRESHOLD and dept_cat == "bootcamp_student")
+        )
+        if is_bootcamp:
+            # 개발 직무 확인: position 또는 department가 dev와 유사도 높으면 수강생 처리
+            is_dev_track = (
+                (pos_dist >= BLOCK_THRESHOLD and pos_cat == "dev")
+                or (dept_dist >= BLOCK_THRESHOLD and dept_cat == "dev")
             )
-        if pos_dist >= BLOCK_THRESHOLD and pos_cat == "bootcamp_student":
+            if not is_dev_track:
+                # 개발 직무 미확인 → 차단
+                return FilterResult(
+                    blocked=True, confidence=max(pos_dist, dept_dist),
+                    nearest_role=pos_title or dept_title, nearest_category="non_dev",
+                )
+            if company_dist >= BLOCK_THRESHOLD and company_cat == "bootcamp_student":
+                best_dist, best_title = company_dist, company_title
+            elif pos_dist >= BLOCK_THRESHOLD and pos_cat == "bootcamp_student":
+                best_dist, best_title = pos_dist, pos_title
+            else:
+                best_dist, best_title = dept_dist, dept_title
             return FilterResult(
-                blocked=False, confidence=pos_dist,
-                nearest_role=pos_title, nearest_category=pos_cat,
-                bootcamp_type="student",
-            )
-        if dept_dist >= BLOCK_THRESHOLD and dept_cat == "bootcamp_student":
-            return FilterResult(
-                blocked=False, confidence=dept_dist,
-                nearest_role=dept_title, nearest_category=dept_cat,
+                blocked=False, confidence=best_dist,
+                nearest_role=best_title, nearest_category="bootcamp_student",
                 bootcamp_type="student",
             )
 
@@ -161,17 +170,10 @@ class JobRelevanceFilter:
                 nearest_role=pos_title, nearest_category=pos_cat,
             )
 
-        # 규칙 5: 직무가 non_dev이면 차단
-        if pos_dist >= BLOCK_THRESHOLD and pos_cat == "non_dev":
-            return FilterResult(
-                blocked=True, confidence=pos_dist,
-                nearest_role=pos_title, nearest_category=pos_cat,
-            )
-
-        # 임계값 미달 → 불확실하므로 LLM에 위임
+        # dev 미확인 → 차단
         best = pos_result or dept_result or company_result or {}
         return FilterResult(
-            blocked=False,
+            blocked=True,
             confidence=best.get("distance", 0.0),
             nearest_role=best.get("text", ""),
             nearest_category=best.get("category", ""),

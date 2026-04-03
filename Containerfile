@@ -10,7 +10,7 @@ WORKDIR ${APP_HOME}
 
 # Minimal runtime deps for common HTTP/TLS/DNS behavior.
 RUN apt-get update \
-    && apt-get install -y --no-install-recommends ca-certificates curl \
+    && apt-get install -y --no-install-recommends ca-certificates curl fonts-nanum \
     && rm -rf /var/lib/apt/lists/*
 
 COPY requirements.txt ./
